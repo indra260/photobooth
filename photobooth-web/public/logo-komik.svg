@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 92" width="340" height="92" role="img" aria-label="Kentamal Booth">
+  <defs>
+    <filter id="saw" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="3" dy="3" stdDeviation="0" flood-color="#202030" flood-opacity="1"/>
+    </filter>
+  </defs>
+
+  <!-- Comic burst/starburst behind camera -->
+  <path d="M74 8 L80 18 L92 14 L87 26 L100 29 L90 37 L102 46 L88 49 L94 62 L80 56 L76 70 L66 58 L54 68 L52 54 L38 56 L42 42 L28 42 L36 30 L24 24 L38 22 L34 10 L50 14 Z"
+    fill="#FFD93D" stroke="#202030" stroke-width="3.5" stroke-linejoin="round"/>
+
+  <!-- Camera badge -->
+  <circle cx="64" cy="40" r="24" fill="#8E36FF" stroke="#202030" stroke-width="4"/>
+  <g transform="translate(64 40)" stroke="#fff" stroke-width="2.8" stroke-linecap="round" fill="none">
+    <rect x="-14" y="-9" width="28" height="19.5" rx="4.5"/>
+    <circle cx="0" cy="0" r="6.6"/>
+    <path d="M-7 -9 L-4.5 -14 L4.5 -14 L7 -9"/>
+    <circle cx="0" cy="0" r="2.4" fill="#fff" stroke="none"/>
+  </g>
+
+  <!-- Flash spark -->
+  <path d="M96 14 L101 6 L104 14 L112 17 L104 20 L101 28 L98 20 L90 17 Z" fill="#fff" stroke="#202030" stroke-width="2.2" stroke-linejoin="round"/>
+
+  <!-- Wordmark KENTAMAL -->
+  <text x="178" y="38" text-anchor="middle" font-family="'Arial Black','Segoe UI',sans-serif" font-weight="900" font-size="27" fill="#FFD93D" stroke="#202030" stroke-width="5" paint-order="stroke" letter-spacing="2">KENTAMAL</text>
+  <text x="178" y="38" text-anchor="middle" font-family="'Arial Black','Segoe UI',sans-serif" font-weight="900" font-size="27" fill="#fff" paint-order="stroke" stroke="#202030" stroke-width="2.5" letter-spacing="2">KENTAMAL</text>
+
+  <!-- Subtitle BOOTH -->
+  <text x="178" y="62" text-anchor="middle" font-family="'Arial Black','Segoe UI',sans-serif" font-weight="900" font-size="16" fill="#8E36FF" stroke="#202030" stroke-width="2" paint-order="stroke" letter-spacing="6">BOOTH</text>
+
+  <!-- Halftone dots -->
+  <g fill="#202030" opacity="0.35">
+    <circle cx="300" cy="78" r="1.5"/><circle cx="309" cy="78" r="1.5"/><circle cx="318" cy="78" r="1.5"/>
+    <circle cx="304" cy="85" r="1.5"/><circle cx="313" cy="85" r="1.5"/>
+  </g>
+</svg>

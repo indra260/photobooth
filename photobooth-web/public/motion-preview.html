@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Opsi Motion & Animasi — Kentamal Booth</title>
+  <style>
+    :root {
+      --bg: #f5f5f5;
+      --ink: #202030;
+      --accent: #8e36ff;
+      --yellow: #fef08a;
+      --line: #202030;
+      --card: #ffffff;
+      --ease: cubic-bezier(.16, 1, .3, 1);
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Chillax", "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      padding: 24px 16px;
+      margin: 0;
+    }
+    .container { max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 32px; font-weight: 800; margin-bottom: 8px; }
+    p.sub { color: #555; margin-top: 0; margin-bottom: 24px; font-size: 15px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+    
+    .demo-card {
+      background: var(--card);
+      border: 2.5px solid var(--line);
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 4px 4px 0 var(--line);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+    }
+    .badge-mobile {
+      align-self: flex-start;
+      background: #e0e7ff;
+      color: #3730a3;
+      border: 1.5px solid var(--line);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge-desktop {
+      align-self: flex-start;
+      background: #fef3c7;
+      color: #92400e;
+      border: 1.5px solid var(--line);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge-both {
+      align-self: flex-start;
+      background: #dcfce7;
+      color: #166534;
+      border: 1.5px solid var(--line);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .preview-box {
+      height: 120px;
+      background: #faf8ff;
+      border: 2px dashed #bbb;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Option 1: Neo-Pop Bounce & Floating Stickers */
+    .opt-bounce {
+      width: 56px; height: 56px;
+      background: var(--yellow);
+      border: 2px solid var(--line);
+      border-radius: 16px;
+      display: grid; place-items: center; font-size: 26px;
+      box-shadow: 3px 3px 0 var(--line);
+      animation: float 3s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      50% { transform: translateY(-10px) rotate(4deg); }
+    }
+
+    /* Option 2: 3D Neo-Tilt & Hover Lift */
+    .opt-lift {
+      padding: 12px 24px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 800;
+      border: 2px solid var(--line);
+      border-radius: 999px;
+      box-shadow: 4px 4px 0 var(--line);
+      cursor: pointer;
+      transition: transform .18s var(--ease), box-shadow .18s var(--ease);
+    }
+    .opt-lift:hover {
+      transform: translate(-3px, -3px) scale(1.04);
+      box-shadow: 7px 7px 0 var(--line);
+    }
+    .opt-lift:active {
+      transform: translate(2px, 2px);
+      box-shadow: 1px 1px 0 var(--line);
+    }
+
+    /* Option 3: Pulse & Shutter Snap */
+    .opt-shutter {
+      width: 60px; height: 60px;
+      border-radius: 50%;
+      background: #fff;
+      border: 3px solid var(--line);
+      display: grid; place-items: center;
+      box-shadow: 3px 3px 0 var(--line);
+      animation: pulse-ring 2s infinite;
+      cursor: pointer;
+    }
+    .opt-shutter b {
+      width: 40px; height: 40px; border-radius: 50%; background: var(--accent); border: 2px solid var(--line);
+    }
+    @keyframes pulse-ring {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.08); box-shadow: 0 0 0 6px rgba(142, 54, 255, 0.2), 4px 4px 0 var(--line); }
+    }
+
+    /* Option 4: Staggered Fade Up / Scroll Reveal */
+    .opt-stagger {
+      display: flex; gap: 8px;
+    }
+    .opt-stagger span {
+      padding: 8px 12px; background: #fff; border: 2px solid var(--line); border-radius: 10px; font-weight: 700;
+      box-shadow: 2px 2px 0 var(--line);
+      animation: staggerIn .8s var(--ease) infinite alternate;
+    }
+    .opt-stagger span:nth-child(1) { animation-delay: 0s; }
+    .opt-stagger span:nth-child(2) { animation-delay: .2s; }
+    .opt-stagger span:nth-child(3) { animation-delay: .4s; }
+    @keyframes staggerIn {
+      from { transform: translateY(8px); opacity: 0.5; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    /* Option 5: Infinite Marquee Strip */
+    .opt-marquee {
+      display: flex; gap: 14px; width: 200%;
+      animation: marquee 5s linear infinite;
+    }
+    .opt-marquee span {
+      background: #fff; border: 2px solid var(--line); border-radius: 999px; padding: 6px 14px; font-weight: 700; font-size: 13px;
+      box-shadow: 2px 2px 0 var(--line);
+      white-space: nowrap;
+    }
+    @keyframes marquee {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    /* Option 6: Comic Pop Sparkle */
+    .opt-sparkle {
+      font-size: 32px;
+      display: inline-block;
+      animation: sparkle 1.2s ease-in-out infinite alternate;
+    }
+    @keyframes sparkle {
+      0% { transform: scale(0.85) rotate(-8deg); }
+      100% { transform: scale(1.2) rotate(12deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Preview Opsi Animasi — Kentamal Booth</h1>
+    <p class="sub">Pilih animasi untuk setiap objek UI (hero, template card, shutter camera, sticker bar). Semua opsi mematuhi <code>prefers-reduced-motion</code>.</p>
+    
+    <div class="grid">
+      <div class="demo-card">
+        <span class="badge-both">📱 Mobile & 💻 Desktop</span>
+        <h3>1. Floating Pop (Stiker & Badge)</h3>
+        <p>Animasi melayang halus dengan rotasi subtle membuat objek tidak kaku.</p>
+        <div class="preview-box">
+          <div class="opt-bounce">💥</div>
+        </div>
+      </div>
+
+      <div class="demo-card">
+        <span class="badge-desktop">💻 Desktop Hover & 📱 Tap</span>
+        <h3>2. Neo-Brutalist Lift & Press</h3>
+        <p>Button & Card terangkat saat hover/tap, lalu menekan ke bayangan.</p>
+        <div class="preview-box">
+          <button class="opt-lift">Coba Hover / Tap</button>
+        </div>
+      </div>
+
+      <div class="demo-card">
+        <span class="badge-both">📱 Mobile & 💻 Desktop</span>
+        <h3>3. Pulse Ring Shutter</h3>
+        <p>Tombol shutter bernapas lembut memberi isyarat siap jepret foto.</p>
+        <div class="preview-box">
+          <div class="opt-shutter"><b /></div>
+        </div>
+      </div>
+
+      <div class="demo-card">
+        <span class="badge-both">📱 Mobile & 💻 Desktop Entrance</span>
+        <h3>4. Staggered Card Entrance</h3>
+        <p>Kartu katalog foto strip muncul berurutan dari bawah ke atas.</p>
+        <div class="preview-box">
+          <div class="opt-stagger">
+            <span>Foto 1</span>
+            <span>Foto 2</span>
+            <span>Foto 3</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="demo-card">
+        <span class="badge-both">📱 Mobile & 💻 Desktop</span>
+        <h3>5. Infinite Marquee Ticker</h3>
+        <p>Teks berjalan santai untuk template trending atau fitur photobooth.</p>
+        <div class="preview-box">
+          <div class="opt-marquee">
+            <span>✨ Comic Strip</span>
+            <span>📸 Polaroid</span>
+            <span>⚡ Y2K Retro</span>
+            <span>💖 Couple Frame</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="demo-card">
+        <span class="badge-both">📱 Mobile & 💻 Desktop</span>
+        <h3>6. Comic Sparkle Wobble</h3>
+        <p>Goyangan komik pop art untuk balon kata & stiker ekspresi.</p>
+        <div class="preview-box">
+          <div class="opt-sparkle">💬 WOW!</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

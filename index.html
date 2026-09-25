@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Booth</title>
+<style>
+  :root {
+    --bg: #121417;
+    --surface: #1c2128;
+    --ink: #f3efe8;
+    --muted: #b7b1a8;
+    --line: #343b44;
+    --accent: #c4271b;
+    --paper: #f4f1ea;
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font: 16px/1.45 "Segoe UI", system-ui, sans-serif;
+    min-height: 100dvh;
+  }
+  header, main { width: min(960px, calc(100% - 32px)); margin: 0 auto; }
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 20px 0 8px;
+  }
+  header strong { font-size: 22px; letter-spacing: -0.03em; }
+  header span { color: var(--muted); font-size: 14px; }
+  h1 { font-size: 28px; letter-spacing: -0.03em; margin: 8px 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 18px; max-width: 62ch; }
+  form, .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .grid { display: grid; gap: 14px; }
+  @media (min-width: 720px) {
+    .two { grid-template-columns: 1fr 1fr; }
+  }
+  label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
+  input, select, button { font: inherit; color: var(--ink); }
+  input, select {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 14px;
+    min-height: 48px;
+  }
+  input:focus, select:focus, button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .choices { display: flex; flex-wrap: wrap; gap: 8px; }
+  .choices button, .ghost, .primary {
+    border-radius: 999px;
+    min-height: 48px;
+    padding: 0 16px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    cursor: pointer;
+  }
+  .choices button[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 650;
+  }
+  .primary:active, .ghost:active, .choices button:active { transform: scale(0.98); }
+  .primary:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .stage {
+    position: relative;
+    background: #000;
+    border-radius: var(--radius);
+    overflow: hidden;
+    min-height: 240px;
+  }
+  .cams { display: grid; gap: 8px; }
+  .cams.dual { grid-template-columns: 1fr 1fr; }
+  video {
+    width: 100%;
+    display: block;
+    background: #000;
+    transform: scaleX(-1);
+    max-height: 62dvh;
+    object-fit: cover;
+  }
+  .count {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 120px;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    text-shadow: 0 8px 30px #000;
+    pointer-events: none;
+  }
+  .flash {
+    position: absolute;
+    inset: 0;
+    background: #fff;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .flash.on { opacity: 0.9; transition: opacity 280ms linear; }
+  .dots { display: flex; gap: 8px; }
+  .dots i {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #5c656f;
+    display: block;
+  }
+  .dots i.on { background: var(--accent); }
+  .dots i.done { background: #d8d2c8; }
+  #preview {
+    width: min(100%, 420px);
+    height: auto;
+    background: var(--paper);
+    border-radius: 12px;
+    touch-action: none;
+  }
+  .stickers button {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    font-size: 22px;
+    cursor: pointer;
+  }
+  .err {
+    background: #3a1614;
+    color: #ffd2cc;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin: 0 0 12px;
+  }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
+  @media (prefers-reduced-motion: reduce) {
+    .flash.on { transition: none; }
+    .primary:active, .ghost:active, .choices button:active { transform: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <strong>Booth</strong>
+  <span id="stepLabel">Siapkan</span>
+</header>
+<main>
+  <p id="error" class="err" hidden></p>
+
+  <section id="setup">
+    <h1>Siapkan sesi</h1>
+    <p class="lead">Foto tetap di tab ini. Yang tersimpan cuma file yang kamu unduh. Dua kamera artinya dua webcam di laptop ini, bukan dua HP.</p>
+    <form id="setupForm" class="grid">
+      <div class="two grid">
+        <label>Nama di strip
+          <input id="boothName" maxlength="24" value="Booth" autocomplete="off">
+        </label>
+        <label>Tautan untuk QR
+          <input id="qrUrl" type="url" inputmode="url" placeholder="https://">
+        </label>
+      </div>
+      <div>
+        <div class="lead">Mode</div>
+        <div class="choices" id="modePick">
+          <button type="button" data-value="1" aria-pressed="true">Satu kamera</button>
+          <button type="button" data-value="2" aria-pressed="false">Dua kamera</button>
+        </div>
+      </div>
+      <div>
+        <div class="lead">Bentuk</div>
+        <div class="choices" id="shapePick">
+          <button type="button" data-value="vertikal" aria-pressed="true">Vertikal</button>
+          <button type="button" data-value="kotak" aria-pressed="false">Kotak</button>
+          <button type="button" data-value="couple" aria-pressed="false">Couple</button>
+          <button type="button" data-value="ulangtahun" aria-pressed="false">Ulang tahun</button>
+          <button type="button" data-value="pose4" aria-pressed="false">4 pose</button>
+        </div>
+      </div>
+      <div class="two grid">
+        <div>
+          <div class="lead">Jeda</div>
+          <div class="choices" id="timerPick">
+            <button type="button" data-value="3" aria-pressed="true">3 detik</button>
+            <button type="button" data-value="5" aria-pressed="false">5 detik</button>
+          </div>
+        </div>
+        <label>Filter
+          <select id="filterPick"></select>
+        </label>
+      </div>
+      <div class="row">
+        <button class="primary" id="startBtn" type="submit">Mulai</button>
+      </div>
+    </form>
+  </section>
+
+  <section id="live" hidden>
+    <h1>Lihat ke kamera</h1>
+    <p class="lead" id="liveLead">Tombol jepret ada di bawah, tidak menutup muka.</p>
+    <div class="stage" id="stage">
+      <div class="cams" id="cams"></div>
+      <div class="count" id="count" aria-live="assertive"></div>
+      <div class="flash" id="flash"></div>
+    </div>
+    <div class="bar">
+      <div class="dots" id="dots"></div>
+      <button class="primary" id="shootBtn" type="button">Jepret</button>
+      <button class="ghost" id="cancelBtn" type="button">Batal</button>
+    </div>
+  </section>
+
+  <section id="edit" hidden>
+    <h1>Atur strip</h1>
+    <p class="lead">Geser stiker di gambar. Crop berlaku ke foto yang dipilih.</p>
+    <div class="panel grid">
+      <canvas id="preview" width="420" height="560"></canvas>
+      <div class="choices" id="thumbs"></div>
+      <div class="two grid">
+        <label>Perbesar
+          <input id="zoom" type="range" min="1" max="2.6" step="0.01" value="1">
+        </label>
+        <label>Geser kiri kanan
+          <input id="panX" type="range" min="-1" max="1" step="0.01" value="0">
+        </label>
+        <label>Geser atas bawah
+          <input id="panY" type="range" min="-1" max="1" step="0.01" value="0">
+        </label>
+        <label>Ukuran stiker
+          <input id="stickerSize" type="range" min="36" max="180" step="1" value="72">
+        </label>
+      </div>
+      <div class="row">
+        <button class="ghost" id="tightBtn" type="button">Crop ketat</button>
+        <button class="ghost" id="delSticker" type="button">Hapus stiker</button>
+      </div>
+      <div class="stickers row" id="stickerBar"></div>
+      <div class="two grid">
+        <label>Rasio unduh
+          <select id="ratio">
+            <option value="asli">Strip asli</option>
+            <option value="9:16">9:16 story</option>
+            <option value="4:5">4:5 feed</option>
+            <option value="1:1">1:1</option>
+          </select>
+        </label>
+        <div class="row">
+          <button class="primary" id="saveBtn" type="button">Unduh</button>
+          <button class="ghost" id="againBtn" type="button">Foto lagi</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="vendor/qrcode.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
