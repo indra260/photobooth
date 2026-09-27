@@ -124,8 +124,25 @@ export default function App() {
   const [customFrame, setCustomFrame] = useState(null);
   const [searchQ, setSearchQ] = useState("");
   const [stats, setStats] = useState(0);
+  const [scrollAt, setScrollAt] = useState({ up: false, down: true });
   const [soundOn, setSoundOn] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Scroll FAB: ↑ muncul pas udah turun, ↓ ilang pas udah mentok bawah
+  useEffect(() => {
+    function onScroll() {
+      const y = window.scrollY;
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      setScrollAt({ up: y > 420, down: y < max - 240 });
+    }
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, []);
   const [user, setUser] = useState(null);
   const [authMode, setAuthMode] = useState("login"); // login | register
   const [authEmail, setAuthEmail] = useState("");
@@ -1185,10 +1202,15 @@ export default function App() {
                   {lang === "id" ? "🇮🇩" : "🇬🇧"}
                 </button>
                 <button className="ghost" type="button" onClick={() => setDark((d) => !d)} aria-label="Mode gelap">{dark ? "🌙" : "☀️"}</button>
-                <span className="stat-pill" title="Total foto dari booth ini">📸 {stats}</span>
-              </div>
-            </div>
-          </header>
+          </div>
+        </div>
+      </header>
+      
+      {/* Scroll to top/bottom FAB */}
+      <div className="jp-scroll-fab" role="group" aria-label="Tombol scroll">
+        <button type="button" className={"jp-scroll-btn" + (scrollAt.up ? "" : " hide")} aria-label="Ke atas" tabIndex={scrollAt.up ? 0 : -1} onClick={() => window.scrollTo({top:0,behavior:'smooth'})}>↑</button>
+        <button type="button" className={"jp-scroll-btn" + (scrollAt.down ? "" : " hide")} aria-label="Ke bawah" tabIndex={scrollAt.down ? 0 : -1} onClick={() => window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'})}>↓</button>
+      </div>
 
           {page === "home" && (
           <main className="jp-hero-section">
@@ -1212,6 +1234,7 @@ export default function App() {
                 <div className="stat-card"><b>{SHAPES.length}</b><span>{lang === "id" ? "Template strip" : "Strip templates"}</span></div>
                 <div className="stat-card"><b>0</b><span>{lang === "id" ? "Aplikasi di-install" : "Apps to install"}</span></div>
                 <div className="stat-card"><b>100%</b><span>{lang === "id" ? "Jalan di browser" : "Runs in browser"}</span></div>
+                <div className="stat-card"><b>📸 {stats}</b><span>{lang === "id" ? "Foto dari booth ini" : "Photos from this booth"}</span></div>
               </div>
 
               <div className="jp-marquee" aria-hidden="true">

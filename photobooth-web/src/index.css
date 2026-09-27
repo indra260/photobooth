@@ -1196,8 +1196,8 @@ button { position: relative; overflow: hidden; }
 }
 
 .jp-stats-row {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  width: min(100%, 720px);
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  width: min(100%, 760px);
   margin: 0 auto;
 }
 
@@ -1669,4 +1669,46 @@ button { position: relative; overflow: hidden; }
   padding: 1px 8px;
   font-weight: 800;
   letter-spacing: .5px;
+}
+
+/* ——— Scroll FAB kanan bawah (landing only) ——— */
+.jp-scroll-fab {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 60;
+}
+.jp-scroll-btn {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--ink);
+  background: var(--soft);
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  box-shadow: 0 4px 14px rgba(36, 29, 61, .28);
+  cursor: pointer;
+  transition: transform .18s var(--ease), background .18s var(--ease), box-shadow .18s var(--ease);
+}
+.jp-scroll-btn:hover {
+  background: var(--yellow);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(36, 29, 61, .24);
+}
+.jp-scroll-btn:active { transform: translateY(0) scale(.92); }
+.jp-scroll-btn.hide {
+  opacity: 0;
+  transform: scale(.55);
+  pointer-events: none;
+}
+@media (max-width: 620px) {
+  .jp-scroll-fab { right: 12px; bottom: 12px; }
+  .jp-scroll-btn { width: 42px; height: 42px; font-size: 19px; }
 }
