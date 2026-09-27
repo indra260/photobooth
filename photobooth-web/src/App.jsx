@@ -167,6 +167,7 @@ export default function App() {
 
   const abort = useRef(false);
   const hist = useRef({ past: [], future: [] });
+  const [histLen, setHistLen] = useState([0, 0]); // [past, future] — buat disabled state tombol
   const pen = useRef(null);
   const preview = useRef(null);
   const drag = useRef(null);
@@ -593,24 +594,41 @@ export default function App() {
   }
 
   // ——— edit tools ———
-  function pushHistory() {
-    hist.current.past.push({ shots, order, stickers, texts, doodles });
+  function snapshot() {
+    return { shots, order, stickers, texts, doodles, template, look, ratio };
+  }
+  function syncHist() { setHistLen([hist.current.past.length, hist.current.future.length]); }
+  function commitSnapshot(s) {
+    hist.current.past.push(s);
     if (hist.current.past.length > 50) hist.current.past.shift();
     hist.current.future = [];
+    syncHist();
+  }
+  function pushHistory() {
+    commitSnapshot(snapshot());
+  }
+  // Helper: catat dulu, baru ubah — buat semua aksi diskrit
+  function withHistory(fn) { pushHistory(); fn(); }
+
+  function restore(s) {
+    setShots(s.shots); setOrder(s.order); setStickers(s.stickers); setTexts(s.texts);
+    setDoodles(s.doodles); setTemplate(s.template); setLook(s.look); setRatio(s.ratio);
   }
 
   function undo() {
     const prev = hist.current.past.pop();
     if (!prev) return;
-    hist.current.future.push({ shots, order, stickers, texts, doodles });
-    setShots(prev.shots); setOrder(prev.order); setStickers(prev.stickers); setTexts(prev.texts); setDoodles(prev.doodles);
+    hist.current.future.push(snapshot());
+    syncHist();
+    restore(prev);
   }
 
   function redo() {
     const next = hist.current.future.pop();
     if (!next) return;
-    hist.current.past.push({ shots, order, stickers, texts, doodles });
-    setShots(next.shots); setOrder(next.order); setStickers(next.stickers); setTexts(next.texts); setDoodles(next.doodles);
+    hist.current.past.push(snapshot());
+    syncHist();
+    restore(next);
   }
 
   function tweakSticker(patch) {
@@ -686,6 +704,7 @@ export default function App() {
   }
 
   function cycle(frameIndex) {
+    pushHistory();
     setOrder((prev) => {
       const next = prev.slice();
       const b = (frameIndex + 1) % next.length;
@@ -981,7 +1000,7 @@ export default function App() {
 
   // ——— canvas pointer edit ———
   function onPointerDown(e) {
-    if (ink) { pen.current = point(preview.current, e); return; }
+    if (ink) { pen.current = point(preview.current, e); drag.current = { kind: "ink", snap: snapshot() }; return; }
     if (e.pointerType === "touch" && pinch.current) return;
     const p = point(preview.current, e);
     const cell = hitCell(template, "1", p.x, p.y);
@@ -990,8 +1009,7 @@ export default function App() {
     setPicked(sticker);
     setPickedText(textHit);
     const kind = sticker >= 0 ? "sticker" : textHit >= 0 ? "text" : cell ? "crop" : "none";
-    if (kind === "crop") pushHistory();
-    drag.current = { kind, ...p, cell, sticker, text: textHit, dist: 0 };
+    drag.current = { kind, ...p, cell, sticker, text: textHit, dist: 0, snap: kind === "none" ? null : snapshot() };
     preview.current.setPointerCapture(e.pointerId);
   }
 
@@ -1039,8 +1057,14 @@ export default function App() {
   }
 
   function onPointerUp(e) {
-    if (ink) { pen.current = null; return; }
     const d = drag.current;
+    if (ink) {
+      pen.current = null;
+      if (d?.snap) commitSnapshot(d.snap); // 1 goresan = 1 undo
+      drag.current = null;
+      return;
+    }
+    if (d && d.snap && d.dist > 3) commitSnapshot(d.snap); // pushHistory kalau beneran ada gerak
     if (preview.current?.hasPointerCapture(e.pointerId)) preview.current.releasePointerCapture(e.pointerId);
     if (d?.kind === "crop" && d.dist < 6 && e.pointerType !== "touch") cycle(d.cell.shot);
     drag.current = null;
@@ -1214,7 +1238,7 @@ export default function App() {
               <div className="catalog">
                 {catalog.map(([id, label, count, desc, img]) => (
                   <div key={id} className={"card-wrap" + (favTemplates.includes(id) ? " fav" : "")}>
-                    <button type="button" className={template === id ? "card on" : "card"} onClick={() => setTemplate(id)}>
+                    <button type="button" className={template === id ? "card on" : "card"} onClick={() => { pushHistory(); setTemplate(id); }}>
                       <span className="shot">
                         <img src={img} alt={label} loading="lazy" />
                       </span>
@@ -1691,8 +1715,8 @@ export default function App() {
           </div>
 
           <div className="undo-bar">
-            <button type="button" className="ghost" onClick={undo}>↩️ Undo</button>
-            <button type="button" className="ghost" onClick={redo}>↪️ Redo</button>
+            <button type="button" className="ghost" onClick={undo} disabled={!histLen[0]} title="Ctrl+Z">↩️ Undo</button>
+            <button type="button" className="ghost" onClick={redo} disabled={!histLen[1]} title="Ctrl+Y">↪️ Redo</button>
             <button type="button" className="ghost" onClick={() => { clearSession(); back(); }}>🧹 Sesi Baru</button>
             <button type="button" className="ghost" onClick={() => setAnimOn((v) => !v)}>{animOn ? "⏸️ Animasi" : "▶️ Animasi"}</button>
           </div>
@@ -1707,7 +1731,7 @@ export default function App() {
             <div className="tab-panel">
               <div className="shapes slim">
                 {SHAPES.map(([id, label]) => (
-                  <button key={id} type="button" className={template === id ? "on" : ""} aria-pressed={template === id} onClick={() => setTemplate(id)}>{label}</button>
+                  <button key={id} type="button" className={template === id ? "on" : ""} aria-pressed={template === id} onClick={() => withHistory(() => setTemplate(id))}>{label}</button>
                 ))}
               </div>
               <label className="ghost" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 8 }}>
@@ -1722,7 +1746,7 @@ export default function App() {
             <div className="tab-panel">
               <div className="looks" role="group" aria-label="Warna frame">
                 {LOOKS.map(([id, color]) => (
-                  <button key={id} type="button" className={look === id ? "on" : ""} aria-label={id} aria-pressed={look === id} style={{ background: color }} onClick={() => setLook(id)} />
+                  <button key={id} type="button" className={look === id ? "on" : ""} aria-label={id} aria-pressed={look === id} style={{ background: color }} onClick={() => withHistory(() => setLook(id))} />
                 ))}
               </div>
             </div>
@@ -1753,16 +1777,13 @@ export default function App() {
                 ))}
               </div>
               <div className="sticker-tools">
-                <button type="button" className="ghost" disabled={picked < 0} onClick={() => tweakSticker((s) => ({ size: clamp(s.size + 14, 36, 200) }))}>➕</button>
-                <button type="button" className="ghost" disabled={picked < 0} onClick={() => tweakSticker((s) => ({ size: clamp(s.size - 14, 36, 200) }))}>➖</button>
-                <button type="button" className="ghost" disabled={picked < 0} onClick={() => tweakSticker((s) => ({ rot: (s.rot + 15) % 360 }))}>🔄</button>
-                <button type="button" className="ghost" disabled={picked < 0} onClick={() => tweakSticker((s) => ({ flip: !s.flip }))}>↔️</button>
-                <button type="button" className="ghost" disabled={picked < 0} onClick={() => {
-                  setStickers((prev) => prev.filter((_, i) => i !== picked));
-                  setPicked(-1);
-                }}>❌</button>
+                <button type="button" className="ghost" disabled={picked < 0} onClick={() => withHistory(() => tweakSticker((s) => ({ size: clamp(s.size + 14, 36, 200) })))}>➕</button>
+                <button type="button" className="ghost" disabled={picked < 0} onClick={() => withHistory(() => tweakSticker((s) => ({ size: clamp(s.size - 14, 36, 200) })))}>➖</button>
+                <button type="button" className="ghost" disabled={picked < 0} onClick={() => withHistory(() => tweakSticker((s) => ({ rot: (s.rot + 15) % 360 })))}>🔄</button>
+                <button type="button" className="ghost" disabled={picked < 0} onClick={() => withHistory(() => tweakSticker((s) => ({ flip: !s.flip })))}>↔️</button>
+                <button type="button" className="ghost" disabled={picked < 0} onClick={() => { pushHistory(); setStickers((prev) => prev.filter((_, i) => i !== picked)); setPicked(-1); }}>❌</button>
                 <button type="button" className={ink ? "ghost on" : "ghost"} aria-pressed={ink} onClick={() => setInk((v) => !v)}>{ink ? "✏️ Selesai" : "✏️ Coret"}</button>
-                <button type="button" className="ghost" disabled={!doodles.length} onClick={() => setDoodles([])}>🗑️ Coretan</button>
+                <button type="button" className="ghost" disabled={!doodles.length} onClick={() => withHistory(() => setDoodles([]))}>🗑️ Coretan</button>
               </div>
             </div>
           )}
@@ -1820,7 +1841,7 @@ export default function App() {
             <div className="tab-panel">
               <div className="timers">
                 {RATIOS.map(([id, label]) => (
-                  <button key={id} type="button" className={ratio === id ? "on" : ""} aria-pressed={ratio === id} onClick={() => setRatio(id)}>{label}</button>
+                  <button key={id} type="button" className={ratio === id ? "on" : ""} aria-pressed={ratio === id} onClick={() => withHistory(() => setRatio(id))}>{label}</button>
                 ))}
               </div>
               <div className="foot">
