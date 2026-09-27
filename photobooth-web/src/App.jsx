@@ -688,9 +688,15 @@ export default function App() {
       setPicked(prev.length);
       return [...prev, { emoji, x: pos.x, y: pos.y, size: 88, rot: 0, flip: false }];
     });
-    // Pop feedback di canvas: scale-out singkat biar terasa stiker "mendarat"
+    // Pop feedback di canvas: 1 goresan = 1 animasi, lalu kelas dibuang biar
+    // #preview animasi print-out normal lagi (kalau gak, pop jadi permanen).
     const cv = preview.current;
-    if (cv) { cv.classList.remove("pop"); void cv.offsetWidth; cv.classList.add("pop"); }
+    if (cv) {
+      cv.classList.remove("pop");
+      void cv.offsetWidth; // paksa reflow supaya animasi bisa dipicu ulang
+      cv.classList.add("pop");
+      cv.addEventListener("animationend", () => cv.classList.remove("pop"), { once: true });
+    }
   }
 
   function dropSticker(emoji, e) {
