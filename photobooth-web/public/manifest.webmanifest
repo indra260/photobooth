@@ -3,16 +3,31 @@
   "short_name": "Kentamal",
   "description": "Photobooth digital praktis & modern — jepret, edit, unduh, share. Tanpa install aplikasi.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#f5f5f5",
-  "theme_color": "#8e36ff",
+  "orientation": "any",
+  "background_color": "#f4f2fb",
+  "theme_color": "#4f46e5",
+  "categories": ["photo", "entertainment"],
+  "lang": "id-ID",
   "icons": [
     {
-      "src": "/logo-komik.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
-  ]
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
 }

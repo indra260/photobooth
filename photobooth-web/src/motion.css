@@ -1,0 +1,180 @@
+/* ——— Motion & animation layer ———
+   Semua pakai transform/opacity doang biar GPU-friendly.
+   Hormat sama prefers-reduced-motion di bawah. */
+
+@keyframes card-sweep {
+  from { opacity: 0; transform: translateY(24px) scale(.96); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes hero-drop {
+  from { opacity: 0; transform: translateY(-28px) scale(.97); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes float-idle {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-7px); }
+}
+@keyframes badge-pop {
+  from { opacity: 0; transform: scale(.7) rotate(-6deg); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes count-burst {
+  0%   { opacity: 0; transform: scale(1.9); }
+  22%  { opacity: 1; transform: scale(1); }
+  78%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(.72); }
+}
+@keyframes shutter-ring {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+  100% { box-shadow: 0 0 0 26px transparent; }
+}
+@keyframes confetti-fall {
+  0%   { opacity: 1; transform: translateY(-10vh) rotate(0deg) scale(1); }
+  100% { opacity: 0; transform: translateY(95vh) rotate(720deg) scale(.7); }
+}
+@keyframes slide-up-panel {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25%      { transform: rotate(-7deg); }
+  75%      { transform: rotate(7deg); }
+}
+@keyframes glow-pulse {
+  0%, 100% { filter: drop-shadow(0 0 0 transparent); }
+  50%      { filter: drop-shadow(0 0 14px color-mix(in srgb, var(--accent) 65%, transparent)); }
+}
+@keyframes marquee-x {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+@keyframes flash-fade {
+  from { opacity: .9; }
+  to   { opacity: 0; }
+}
+@keyframes dot-bounce {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.45); }
+}
+@keyframes print-out {
+  from { transform: translateY(-12%) scaleY(.92); }
+  to   { transform: none; }
+}
+
+/* ——— Landing ——— */
+.landing .jp-badge-pill { animation: badge-pop .55s var(--ease) both; }
+.landing .jp-hero-content h1 { animation: hero-drop .6s .06s var(--ease) both; }
+.landing .jp-subtitle { animation: hero-drop .6s .14s var(--ease) both; }
+.landing .jp-cta-group { animation: hero-drop .6s .2s var(--ease) both; }
+.landing .jp-stats-row { animation: hero-drop .6s .26s var(--ease) both; }
+
+/* Kartu katalog / step / stat: stagger pakai nth-child */
+.catalog .card-wrap, .steps-grid .step-card, .jp-stats-row .stat-card, .testi-card {
+  animation: card-sweep .5s var(--ease) both;
+}
+.catalog .card-wrap:nth-child(3n+1), .steps-grid .step-card:nth-child(1), .jp-stats-row .stat-card:nth-child(1) { animation-delay: .05s; }
+.catalog .card-wrap:nth-child(3n+2), .steps-grid .step-card:nth-child(2), .jp-stats-row .stat-card:nth-child(2) { animation-delay: .12s; }
+.catalog .card-wrap:nth-child(3n+3), .steps-grid .step-card:nth-child(3), .jp-stats-row .stat-card:nth-child(3) { animation-delay: .19s; }
+.steps-grid .step-card:nth-child(4), .jp-stats-row .stat-card:nth-child(4) { animation-delay: .26s; }
+
+/* Logo dikit hidup */
+.jp-logo-img { transition: transform .35s var(--ease); }
+.jp-logo-img:hover { transform: rotate(-3deg) scale(1.06); }
+.jp-btn-giant { transition: transform .18s var(--ease), box-shadow .18s var(--ease); }
+.jp-btn-giant:hover { animation: glow-pulse 1.6s ease-in-out infinite; transform: translateY(-2px); }
+.jp-btn-giant:active { transform: translateY(1px) scale(.98); }
+
+/* Reveal scroll yang sekarang lebih sinematik (hanya aktif kalau JS jalan) */
+.js [data-reveal] { opacity: 0; transform: translateY(26px) scale(.985); transition: opacity .65s var(--ease), transform .65s var(--ease); }
+.js [data-reveal].in { opacity: 1; transform: none; }
+
+/* ——— Mode screen ——— */
+.mode-screen .mode-card { animation: card-sweep .5s var(--ease) both; }
+.mode-screen .mode-card:nth-child(2) { animation-delay: .1s; }
+.mode-card:hover { transform: translateY(-4px) scale(1.015); }
+.mode-card .mode-icon { display: inline-block; transition: transform .3s var(--ease); }
+.mode-card:hover .mode-icon { animation: wiggle .5s ease-in-out; transform: scale(1.18); }
+.room-help { animation: slide-up-panel .45s var(--ease) both; }
+
+/* ——— Live booth ——— */
+.count { animation: count-burst 1s var(--ease) both; }
+.stage .cams video { animation: print-out .5s var(--ease) both; }
+.shutter { position: relative; }
+.shutter:not(:disabled):active { transform: scale(.94); }
+.shutter b { transition: transform .15s var(--ease); }
+.shutter:hover b { transform: scale(1.12); }
+.shutter:not(:disabled):hover { animation: shutter-ring 1.1s ease-out infinite; }
+.dots i { transition: transform .25s var(--ease), background .25s var(--ease); }
+.dots i.done { animation: dot-bounce .4s var(--ease); }
+.filters button { transition: transform .16s var(--ease), box-shadow .16s var(--ease); }
+.filters button:hover { transform: translateY(-3px); }
+.progress-fill { transition: width 1s linear; }
+
+/* ——— Studio ——— */
+.edit-header, .studio-tabs, .tab-panel, .thumbs, .undo-bar, .edit-actions { animation: slide-up-panel .4s var(--ease) both; }
+.studio-tabs { animation-delay: .05s; }
+.tab-panel { animation-delay: .1s; }
+.thumbs { animation-delay: .12s; }
+.undo-bar { animation-delay: .16s; }
+.edit-actions { animation-delay: .2s; }
+#preview { animation: print-out .55s var(--ease) both; }
+.thumb-wrap { animation: card-sweep .4s var(--ease) both; }
+.thumb-wrap:nth-child(2) { animation-delay: .06s; }
+.thumb-wrap:nth-child(3) { animation-delay: .12s; }
+.thumb-wrap:nth-child(4) { animation-delay: .18s; }
+.thumb-wrap:hover { transform: translateY(-3px) rotate(-1.5deg); }
+.gallery-item { animation: card-sweep .4s var(--ease) both; }
+.gallery-item:hover { transform: translateY(-4px) scale(1.03); }
+.stickers button { transition: transform .14s var(--ease); }
+.stickers button:hover { animation: wiggle .4s ease-in-out; transform: scale(1.2); }
+.looks button { transition: transform .18s var(--ease), box-shadow .18s var(--ease); }
+.looks button:hover { transform: scale(1.18) rotate(8deg); }
+
+/* ——— Confetti & ripple: sudah ada di index.css (confetti-fall, ripple) ——— */
+
+/* ——— Onboarding masuk dengan pop ——— */
+.onboard-card { animation: badge-pop .45s var(--ease) both; }
+
+/* ——— Marquee template wall (ala Funcam) ——— */
+.jp-marquee {
+  overflow: hidden; margin-top: 26px; padding: 10px 0;
+  border-top: 2.5px solid var(--line); border-bottom: 2.5px solid var(--line);
+  background: var(--yellow); transform: rotate(-1deg);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+          mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+.jp-marquee-track { display: flex; width: max-content; animation: marquee-x 26s linear infinite; }
+.jp-marquee:hover .jp-marquee-track { animation-play-state: paused; }
+.jp-marquee-run { display: flex; gap: 26px; padding-right: 26px; white-space: nowrap; }
+.jp-marquee b { font-size: 14px; letter-spacing: .5px; color: var(--ink); text-transform: uppercase; }
+
+/* ——— Tombol fullscreen di pojok stage ——— */
+.fs-btn {
+  position: absolute; top: 10px; right: 10px; z-index: 6;
+  width: 40px; height: 40px; border-radius: 12px;
+  border: 2.5px solid var(--line); background: rgba(255,255,255,.85);
+  font-size: 18px; line-height: 1; cursor: pointer;
+  box-shadow: 2px 2px 0 var(--line);
+  transition: transform .15s var(--ease), opacity .2s;
+  opacity: .75;
+}
+.fs-btn:hover { transform: scale(1.1) rotate(3deg); opacity: 1; }
+.fs-btn:active { transform: scale(.94); }
+
+/* ——— Reduced motion: matiin SEMUA animasi, transisi tetap minor ——— */
+@media (prefers-reduced-motion: reduce) {
+  .landing .jp-badge-pill, .landing .jp-hero-content h1, .landing .jp-subtitle,
+  .landing .jp-cta-group, .landing .jp-stats-row, .catalog .card-wrap,
+  .steps-grid .step-card, .jp-stats-row .stat-card, .testi-card,
+  .mode-screen .mode-card, .room-help, .count, .stage .cams video,
+  .edit-header, .studio-tabs, .tab-panel, .thumbs, .undo-bar, .edit-actions,
+  #preview, .thumb-wrap, .gallery-item, .onboard-card, .jp-marquee-track,
+ .shutter:not(:disabled):hover, .jp-btn-giant:hover, .dots i.done,
+ .stickers button:hover, .looks button:hover {
+   animation: none !important;
+ }
+ .js [data-reveal] { opacity: 1; transform: none; }
+ .ripple-ink { display: none; }
+ *, *::before, *::after { transition-duration: .12s !important; }
+ }

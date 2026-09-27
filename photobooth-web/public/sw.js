@@ -1,4 +1,5 @@
-const CACHE = "kentamal-v1";
+// Service Worker — cache versi dibump tiap update untuk bypass staleness
+const CACHE = "kentamal-v3";
 const PRECACHE = ["/", "/logo-komik.svg", "/filter-base.jpg", "/qrcode.min.js"];
 
 self.addEventListener("install", (e) => {

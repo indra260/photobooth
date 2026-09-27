@@ -1,36 +1,43 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 92" width="340" height="92" role="img" aria-label="Kentamal Booth">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 96" width="360" height="96" role="img" aria-label="Kentamal Booth">
   <defs>
-    <filter id="saw" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="3" dy="3" stdDeviation="0" flood-color="#202030" flood-opacity="1"/>
-    </filter>
+    <linearGradient id="lens" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8B85F0"/>
+      <stop offset="1" stop-color="#3730A3"/>
+    </linearGradient>
   </defs>
 
-  <!-- Comic burst/starburst behind camera -->
-  <path d="M74 8 L80 18 L92 14 L87 26 L100 29 L90 37 L102 46 L88 49 L94 62 L80 56 L76 70 L66 58 L54 68 L52 54 L38 56 L42 42 L28 42 L36 30 L24 24 L38 22 L34 10 L50 14 Z"
-    fill="#FFD93D" stroke="#202030" stroke-width="3.5" stroke-linejoin="round"/>
+  <!-- Comic starburst behind camera badge -->
+  <path d="M62 6 L69 18 L83 12 L79 27 L94 29 L83 39 L96 49 L80 52 L85 67 L70 61 L64 76 L55 63 L41 73 L40 57 L24 58 L30 43 L15 41 L26 31 L14 21 L30 20 L27 5 L43 11 L50 -2 Z"
+        transform="translate(12 4)"
+        fill="#FFCF3F" stroke="#241D3D" stroke-width="3.5" stroke-linejoin="round"/>
 
   <!-- Camera badge -->
-  <circle cx="64" cy="40" r="24" fill="#8E36FF" stroke="#202030" stroke-width="4"/>
-  <g transform="translate(64 40)" stroke="#fff" stroke-width="2.8" stroke-linecap="round" fill="none">
-    <rect x="-14" y="-9" width="28" height="19.5" rx="4.5"/>
-    <circle cx="0" cy="0" r="6.6"/>
-    <path d="M-7 -9 L-4.5 -14 L4.5 -14 L7 -9"/>
-    <circle cx="0" cy="0" r="2.4" fill="#fff" stroke="none"/>
+  <circle cx="74" cy="44" r="25" fill="url(#lens)" stroke="#241D3D" stroke-width="4"/>
+  <g transform="translate(74 44)" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <rect x="-13" y="-8" width="26" height="18" rx="4.5"/>
+    <path d="M-6.5 -8 L-4 -13 L4 -13 L6.5 -8"/>
+    <circle cx="0" cy="1" r="6"/>
+    <circle cx="8" cy="-3.5" r="1.2" fill="#fff" stroke="none"/>
   </g>
+  <circle cx="74" cy="45" r="2.4" fill="#FFCF3F" stroke="none"/>
 
   <!-- Flash spark -->
-  <path d="M96 14 L101 6 L104 14 L112 17 L104 20 L101 28 L98 20 L90 17 Z" fill="#fff" stroke="#202030" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="M104 16 L108.5 8 L111 16 L119 19 L111 22 L108.5 30 L106 22 L98 19 Z"
+        fill="#fff" stroke="#241D3D" stroke-width="2.2" stroke-linejoin="round"/>
 
-  <!-- Wordmark KENTAMAL -->
-  <text x="178" y="38" text-anchor="middle" font-family="'Arial Black','Segoe UI',sans-serif" font-weight="900" font-size="27" fill="#FFD93D" stroke="#202030" stroke-width="5" paint-order="stroke" letter-spacing="2">KENTAMAL</text>
-  <text x="178" y="38" text-anchor="middle" font-family="'Arial Black','Segoe UI',sans-serif" font-weight="900" font-size="27" fill="#fff" paint-order="stroke" stroke="#202030" stroke-width="2.5" letter-spacing="2">KENTAMAL</text>
+  <!-- Wordmark -->
+  <g font-family="'Arial Black','Segoe UI Black','Segoe UI',sans-serif" font-weight="900" text-anchor="middle">
+    <text x="228" y="46" font-size="26" letter-spacing="1.5"
+          fill="#FFCF3F" stroke="#241D3D" stroke-width="6" paint-order="stroke">KENTAMAL</text>
+    <text x="228" y="46" font-size="26" letter-spacing="1.5"
+          fill="#FFFFFF" stroke="#241D3D" stroke-width="0" paint-order="stroke">KENTAMAL</text>
+    <text x="228" y="74" font-size="15" letter-spacing="7.5"
+          fill="#4F46E5" stroke="#241D3D" stroke-width="2.4" paint-order="stroke">BOOTH</text>
+  </g>
 
-  <!-- Subtitle BOOTH -->
-  <text x="178" y="62" text-anchor="middle" font-family="'Arial Black','Segoe UI',sans-serif" font-weight="900" font-size="16" fill="#8E36FF" stroke="#202030" stroke-width="2" paint-order="stroke" letter-spacing="6">BOOTH</text>
-
-  <!-- Halftone dots -->
-  <g fill="#202030" opacity="0.35">
-    <circle cx="300" cy="78" r="1.5"/><circle cx="309" cy="78" r="1.5"/><circle cx="318" cy="78" r="1.5"/>
-    <circle cx="304" cy="85" r="1.5"/><circle cx="313" cy="85" r="1.5"/>
+  <!-- Halftone accent -->
+  <g fill="#241D3D" opacity="0.3">
+    <circle cx="322" cy="84" r="1.6"/><circle cx="331" cy="84" r="1.6"/><circle cx="340" cy="84" r="1.6"/>
+    <circle cx="326.5" cy="91" r="1.6"/><circle cx="335.5" cy="91" r="1.6"/>
   </g>
 </svg>

@@ -119,12 +119,20 @@ export function paintStrip(canvas, { template, mode, shots, stickers, texts, nam
         ctx.filter = "none";
       }
 
-      // Smooth Blur / Retouch skin glow if enabled
-      if (retouch?.smooth > 0) {
+      // Soft glow retouch: blurred copy composited back at low alpha
+      // (bukan blok warna pink seperti versi lama — ini benar-benar melembutkan).
+      if (retouch?.smooth > 0 && img) {
         ctx.save();
-        ctx.fillStyle = `rgba(255, 192, 203, ${retouch.smooth * 0.08})`;
-        ctx.globalCompositeOperation = "soft-light";
-        ctx.fillRect(slot.x, slot.y, slot.w, slot.h);
+        ctx.clip();
+        const glow = Math.min(0.5, retouch.smooth * 0.09);
+        const tmp = document.createElement("canvas");
+        tmp.width = slot.w;
+        tmp.height = slot.h;
+        const tctx = tmp.getContext("2d");
+        tctx.filter = `blur(${6 * retouch.smooth}px) brightness(1.04)`;
+        tctx.drawImage(canvas, slot.x, slot.y, slot.w, slot.h, 0, 0, slot.w, slot.h);
+        ctx.globalAlpha = glow;
+        ctx.drawImage(tmp, slot.x, slot.y);
         ctx.restore();
       }
 
@@ -169,11 +177,11 @@ export function paintStrip(canvas, { template, mode, shots, stickers, texts, nam
 
     if (idx === pickedText) {
       const w = ctx.measureText(t.text).width;
-      ctx.strokeStyle = "#8e36ff";
+      ctx.strokeStyle = "#4f46e5";
       ctx.lineWidth = 2.5;
       ctx.setLineDash([6, 4]);
       ctx.strokeRect(-w / 2 - 8, -(t.size || 36) / 2 - 8, w + 16, t.size + 16);
-      ctx.fillStyle = "#8e36ff";
+      ctx.fillStyle = "#4f46e5";
       ctx.setLineDash([]);
       ctx.fillRect(-w / 2 - 13, -(t.size || 36) / 2 - 13, 10, 10);
       ctx.fillRect(w / 2 + 3, -(t.size || 36) / 2 - 13, 10, 10);
@@ -196,14 +204,14 @@ export function paintStrip(canvas, { template, mode, shots, stickers, texts, nam
 
     // If selected, draw highlight box and handles
     if (idx === pickedSticker) {
-      ctx.strokeStyle = "#8e36ff";
+      ctx.strokeStyle = "#4f46e5";
       ctx.lineWidth = 2.5;
       ctx.setLineDash([6, 4]);
       const sz = st.size * 0.75;
       ctx.strokeRect(-sz, -sz, sz * 2, sz * 2);
 
       // Handles
-      ctx.fillStyle = "#8e36ff";
+      ctx.fillStyle = "#4f46e5";
       ctx.setLineDash([]);
       ctx.fillRect(-sz - 5, -sz - 5, 10, 10);
       ctx.fillRect(sz - 5, -sz - 5, 10, 10);
@@ -215,7 +223,7 @@ export function paintStrip(canvas, { template, mode, shots, stickers, texts, nam
   });
 
   // Doodles / Ink
-  ctx.strokeStyle = "#8e36ff";
+  ctx.strokeStyle = "#4f46e5";
   ctx.lineWidth = 8;
   ctx.lineCap = "round";
   (ink || []).forEach((d) => {
@@ -269,7 +277,7 @@ export function paintStrip(canvas, { template, mode, shots, stickers, texts, nam
 
 export function fitRatio(strip, ratio) {
   if (ratio === "asli") return strip;
-  const map = { "9:16": [9, 16], "4:5": [4, 5], "1:1": [1, 1] };
+  const map = { "9:16": [9, 16], "4:5": [4, 5], "1:1": [1, 1], "3:2": [3, 2], "2:3": [2, 3] };
   const pair = map[ratio] || [9, 16];
   const long = 1800;
   const landscape = pair[0] > pair[1];

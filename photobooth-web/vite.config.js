@@ -1,8 +1,8 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { roomPlugin } from './room-plugin.js'
 
+// room-plugin.js lama (REST /api/room) sudah digantikan PeerJS dan tidak dipakai lagi.
 export default defineConfig({
-  plugins: [react(), roomPlugin()],
+  plugins: [react()],
   server: { host: '0.0.0.0', port: 5173 },
 })
