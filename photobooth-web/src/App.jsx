@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Peer from "peerjs";
 import { FILTERS, TEMPLATES, filterById, filterWithIntensity, geometry } from "./booth";
 import { downloadStrip, fitRatio, paintStrip } from "./draw";
 import { authEnabled, supabase } from "./supabase";
@@ -174,6 +173,8 @@ export default function App() {
   const pinch = useRef(null);
   const peer = useRef(null);
   const conns = useRef([]);
+  const peerMod = useRef(null);
+  const roomSeq = useRef(0);
   const camsRef = useRef([]);
   const canRetryCamera = errorKind === "camera";
 
@@ -388,39 +389,46 @@ export default function App() {
   }
 
   function destroyPeer() {
+    roomSeq.current++; // batalkan peer yang masih dalam proses lazy-load
     peer.current?.destroy();
     peer.current = null;
     conns.current = [];
+  }
+
+  // PeerJS di-download saat room pertama dibuka (hemat ~40% boot load di HP)
+  async function loadPeer() {
+    if (!peerMod.current) peerMod.current = import("peerjs").then((m) => m.default);
+    return peerMod.current;
   }
 
   function hostRoom(code) {
     const next = (code || room || "").toUpperCase();
     if (!/^[A-Z0-9]{4}$/.test(next)) { setError("Kode room harus 4 huruf/angka."); setErrorKind(""); return; }
     destroyPeer();
+    const seq = ++roomSeq.current;
     setRoom(next);
     setRoomRole("host");
-    const p = new Peer(`kentamal-${next.toLowerCase()}`);
-    peer.current = p;
-    p.on("open", () => setPeerStatus(`Room ${next} aktif — tunggu teman.`));
-    p.on("connection", (conn) => {
-      conns.current.push(conn);
-      setPeerStatus("HP teman terhubung! 📱");
-      conn.on("data", (data) => {
-        if (!data) return;
-        if (data.type === "photo") receiveRemoteShot(data.url);
-        if (data.type === "strip") setRemoteStripUrl(data.url);
+    loadPeer().then((Peer) => {
+      if (seq !== roomSeq.current) return;
+      const p = new Peer(`kentamal-${next.toLowerCase()}`);
+      peer.current = p;
+      p.on("open", () => setPeerStatus(`Room ${next} aktif — tunggu teman.`));
+      p.on("connection", (conn) => {
+        conns.current.push(conn);
+        setPeerStatus("HP teman terhubung! 📱");
+        conn.on("data", (data) => {
+          if (!data) return;
+          if (data.type === "photo") receiveRemoteShot(data.url);
+          if (data.type === "strip") setRemoteStripUrl(data.url);
+        });
+        conn.on("close", () => {
+          conns.current = conns.current.filter((c) => c !== conn);
+          setPeerStatus(conns.current.length ? "Ada teman terputus." : `Room ${next} aktif — tunggu teman.`);
+        });
+        conn.on("error", () => setPeerStatus("Koneksi teman error."));
+        setTimeout(() => { try { conn.send({ type: "ping" }); } catch { /* ignore */ } }, 300);
       });
-      conn.on("close", () => {
-        conns.current = conns.current.filter((c) => c !== conn);
-        setPeerStatus(conns.current.length ? "Ada teman terputus." : `Room ${next} aktif — tunggu teman.`);
-      });
-      conn.on("error", () => setPeerStatus("Koneksi teman error."));
-      setTimeout(() => { try { conn.send({ type: "ping" }); } catch { /* ignore */ } }, 300);
-    });
-    p.on("error", (err) => {
-      setPeerStatus(err.type === "unavailable-id"
-        ? `Kode ${next} sedang dipakai — ganti kode lain.`
-        : "Room error: " + err.type);
+      p.on("error", (err) => setPeerStatus(err.type === "unavailable-id" ? `Kode ${next} sedang dipakai — ganti kode lain.` : "Room error: " + err.type));
     });
   }
 
@@ -428,25 +436,29 @@ export default function App() {
     const next = (code || join || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
     if (!/^[A-Z0-9]{4}$/.test(next)) { setError("Masukkan kode room 4 huruf/angka."); setErrorKind(""); return; }
     destroyPeer();
+    const seq = ++roomSeq.current;
     setRoom(next);
     setRoomRole("guest");
     setJoin(next);
-    const p = new Peer();
-    peer.current = p;
-    p.on("open", () => {
-      const conn = p.connect(`kentamal-${next.toLowerCase()}`);
-      conns.current = [conn];
-      setPeerStatus(`Menghubungkan ke ${next}…`);
-      conn.on("open", () => setPeerStatus(`Terhubung ke room ${next}! 📱`));
-      conn.on("data", (d) => {
-        if (!d) return;
-        if (d.type === "ping") setPeerStatus(`Terhubung ke room ${next}! 📱`);
-        if (d.type === "strip") setRemoteStripUrl(d.url);
+    loadPeer().then((Peer) => {
+      if (seq !== roomSeq.current) return;
+      const p = new Peer();
+      peer.current = p;
+      p.on("open", () => {
+        const conn = p.connect(`kentamal-${next.toLowerCase()}`);
+        conns.current = [conn];
+        setPeerStatus(`Menghubungkan ke ${next}…`);
+        conn.on("open", () => setPeerStatus(`Terhubung ke room ${next}! 📱`));
+        conn.on("data", (d) => {
+          if (!d) return;
+          if (d.type === "ping") setPeerStatus(`Terhubung ke room ${next}! 📱`);
+          if (d.type === "strip") setRemoteStripUrl(d.url);
+        });
+        conn.on("close", () => { setPeerStatus("Koneksi tertutup."); conns.current = []; });
+        conn.on("error", () => setPeerStatus("Room tidak ditemukan. Cek kode."));
       });
-      conn.on("close", () => { setPeerStatus("Koneksi tertutup."); conns.current = []; });
-      conn.on("error", () => setPeerStatus("Room tidak ditemukan. Cek kode."));
+      p.on("error", (err) => setPeerStatus("Error: " + (err.type || "jaringan") + " — coba lagi."));
     });
-    p.on("error", (err) => setPeerStatus("Error: " + (err.type || "jaringan") + " — coba lagi."));
   }
 
   function receiveRemoteShot(url) {
