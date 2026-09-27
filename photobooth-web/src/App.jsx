@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Component, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FILTERS, TEMPLATES, filterById, filterWithIntensity, geometry } from "./booth";
 import { downloadStrip, fitRatio, paintStrip } from "./draw";
 import { authEnabled, supabase } from "./supabase";
@@ -95,6 +95,31 @@ const STRINGS = {
 
 const emptyRetouch = { brightness: 100, contrast: 100, saturate: 100, smooth: 0 };
 
+// ——— Error boundary: tangkap crash render biar gak white screen ———
+export class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  componentDidCatch(err, info) { console.error("[Kentamal] render crash:", err, info?.componentStack); }
+  render() {
+    if (this.state.err) {
+      return (
+        <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--bg, #f4f2fb)", color: "var(--ink, #241d3d)", padding: 24 }}>
+          <div style={{ maxWidth: 420, textAlign: "center", background: "var(--card, #fff)", border: "2.5px solid var(--line, #241d3d)", borderRadius: 18, padding: "24px", boxShadow: "4px 4px 0 var(--line, #241d3d)" }}>
+            <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 10px" }}>😵 Ada yang error</h2>
+            <p style={{ fontSize: 14, color: "var(--muted, #6f6690)", margin: "0 0 18px" }}>
+              Aplikasi sempat crash, tapi fotomu tetap aman di galeri lokal. Coba muat ulang.
+            </p>
+            <button type="button" onClick={() => location.reload()} style={{ background: "var(--accent, #4f46e5)", color: "#fff", border: 0, borderRadius: 999, padding: "10px 22px", fontWeight: 800, cursor: "pointer" }}>
+              🔁 Muat Ulang
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   const [page, setPage] = useState("home"); // home | software | booth | creators | pricing | login
   const [step, setStep] = useState("boot"); // boot (landing) | mode | live | edit
@@ -125,6 +150,8 @@ export default function App() {
   const [searchQ, setSearchQ] = useState("");
   const [stats, setStats] = useState(0);
   const [scrollAt, setScrollAt] = useState({ up: false, down: true });
+  const [kbdHint, setKbdHint] = useState("");
+  const kbdHintTimer = useRef(null);
   const [soundOn, setSoundOn] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -661,6 +688,9 @@ export default function App() {
       setPicked(prev.length);
       return [...prev, { emoji, x: pos.x, y: pos.y, size: 88, rot: 0, flip: false }];
     });
+    // Pop feedback di canvas: scale-out singkat biar terasa stiker "mendarat"
+    const cv = preview.current;
+    if (cv) { cv.classList.remove("pop"); void cv.offsetWidth; cv.classList.add("pop"); }
   }
 
   function dropSticker(emoji, e) {
@@ -760,11 +790,17 @@ export default function App() {
       if (retakeSlot >= 0) shootSingle(retakeSlot);
       else shoot();
     }
-    if (step === "edit" && (e.key === "u" || e.key === "U")) undo();
-    if (step === "edit" && (e.key === "r" || e.key === "R") && !e.ctrlKey && !e.metaKey) redo();
+    let hintMsg = "";
+    if (step === "edit" && (e.key === "u" || e.key === "U")) { undo(); hintMsg = "↩️ Undo (U)"; }
+    if (step === "edit" && (e.key === "r" || e.key === "R") && !e.ctrlKey && !e.metaKey) { redo(); hintMsg = "↪️ Redo (R)"; }
     if (step === "edit" && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
       e.preventDefault();
-      if (e.shiftKey) redo(); else undo();
+      if (e.shiftKey) { redo(); hintMsg = "↪️ Redo (Ctrl+Shift+Z)"; } else { undo(); hintMsg = "↩️ Undo (Ctrl+Z)"; }
+    }
+    if (hintMsg) {
+      setKbdHint(hintMsg);
+      clearTimeout(kbdHintTimer.current);
+      kbdHintTimer.current = setTimeout(() => setKbdHint(""), 1600);
     }
   };
   useEffect(() => {
@@ -1466,7 +1502,7 @@ export default function App() {
       )}
 
       {step === "mode" && (
-        <section className="mode-screen">
+        <section className="mode-screen step-screen">
           <header className="jp-nav" style={{ width: "100%", maxWidth: 900 }}>
             <div className="jp-logo">
               <img src="/logo-komik.svg" alt="Kentamal Booth" className="jp-logo-img" style={{ cursor: "pointer" }} onClick={() => setStep("boot")} />
@@ -1557,7 +1593,7 @@ export default function App() {
       )}
 
       {step === "live" && (
-        <section className="live">
+        <section className="live step-screen">
           <header className="live-header">
             <strong>Kentamal Live {mode === "2" ? <span className="room-pill">Room: {room} • {roomRole === "host" ? "tuan rumah" : "tamu"}</span> : null}</strong>
             <div>
@@ -1742,6 +1778,7 @@ export default function App() {
             <button type="button" className="ghost" onClick={redo} disabled={!histLen[1]} title="Ctrl+Y">↪️ Redo</button>
             <button type="button" className="ghost" onClick={() => { clearSession(); back(); }}>🧹 Sesi Baru</button>
             <button type="button" className="ghost" onClick={() => setAnimOn((v) => !v)}>{animOn ? "⏸️ Animasi" : "▶️ Animasi"}</button>
+            {kbdHint && <span className="kbd-hint" role="status" aria-live="polite">{kbdHint}</span>}
           </div>
 
           <div className="studio-tabs" role="tablist" aria-label="Panel edit">
@@ -1920,6 +1957,7 @@ function Stage({ cams, filterCss, count, flash, mirror }) {
   }
   return (
     <div className="stage">
+      {cams.length === 0 && <div className="cam-skeleton" aria-hidden="true"><span>Memuat kamera…</span></div>}
       <div className={"cams" + (cams.length > 1 ? " dual" : "")} id="cams">
         {cams.map((stream, i) => <Cam key={stream.id || i} stream={stream} filterCss={filterCss} mirror={mirror} />)}
       </div>

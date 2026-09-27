@@ -1712,3 +1712,14 @@ button { position: relative; overflow: hidden; }
   .jp-scroll-fab { right: 12px; bottom: 12px; }
   .jp-scroll-btn { width: 42px; height: 42px; font-size: 19px; }
 }
+
+/* ——— Page transition: neo-brutalism slide + view transition API ——— */
+@supports (view-transition-name: root) {
+  ::view-transition-old(root) { animation: vt-slide-left .26s var(--ease) both; }
+  ::view-transition-new(root) { animation: vt-slide-right .26s var(--ease) both; }
+}
+@keyframes vt-slide-left  { to { transform: translateX(-24px); opacity: 0; } }
+@keyframes vt-slide-right { from { transform: translateX(24px);  opacity: 0; } }
+
+/* Step entrance (mode→live→studio→edit) pakai same motion token */
+.step-screen { animation: slide-up-panel .42s var(--ease) both; }

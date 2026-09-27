@@ -101,13 +101,18 @@
 .count { animation: count-burst 1s var(--ease) both; }
 .stage .cams video { animation: print-out .5s var(--ease) both; }
 .shutter { position: relative; }
-.shutter:not(:disabled):active { transform: scale(.94); }
+.shutter:not(:disabled):active { 
+  transform: scale(.94);
+  box-shadow: 3px 3px 8px rgba(36,29,61,.35), inset 0 -2px 0 var(--ink);
+}
 .shutter b { transition: transform .15s var(--ease); }
 .shutter:hover b { transform: scale(1.12); }
 .shutter:not(:disabled):hover { animation: shutter-ring 1.1s ease-out infinite; }
 .dots i { transition: transform .25s var(--ease), background .25s var(--ease); }
 .dots i.done { animation: dot-bounce .4s var(--ease); }
-.filters button { transition: transform .16s var(--ease), box-shadow .16s var(--ease); }
+.filters button { 
+  transition: transform .16s var(--ease), box-shadow .16s var(--ease), filter .25s ease-out;
+}
 .filters button:hover { transform: translateY(-3px); }
 .progress-fill { transition: width 1s linear; }
 
@@ -169,7 +174,8 @@
   .steps-grid .step-card, .jp-stats-row .stat-card, .testi-card,
   .mode-screen .mode-card, .room-help, .count, .stage .cams video,
   .edit-header, .studio-tabs, .tab-panel, .thumbs, .undo-bar, .edit-actions,
-  #preview, .thumb-wrap, .gallery-item, .onboard-card, .jp-marquee-track,
+  #preview, #preview.pop, .cam-skeleton::after, .thumb-wrap, .gallery-item, .step-screen,
+  .onboard-card, .jp-marquee-track,
  .shutter:not(:disabled):hover, .jp-btn-giant:hover, .dots i.done,
  .stickers button:hover, .looks button:hover {
    animation: none !important;
@@ -177,4 +183,37 @@
  .js [data-reveal] { opacity: 1; transform: none; }
  .ripple-ink { display: none; }
  *, *::before, *::after { transition-duration: .12s !important; }
- }
+}
+
+/* ——— Sticker landing pop di canvas ——— */
+@keyframes sticker-land {
+  0%   { transform: scale(.93); }
+  45%  { transform: scale(1.03); }
+  100% { transform: none; }
+}
+#preview.pop { animation: sticker-land .28s var(--ease) both; }
+
+/* ——— Skeleton loading video (camera boot) ——— */
+.cam-skeleton {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  background: #0d0a18; z-index: 3; pointer-events: none;
+}
+.cam-skeleton::after {
+  content: ""; width: 54px; height: 54px; border-radius: 50%;
+  border: 5px solid rgba(124,110,240,.25); border-top-color: #7c6ef0;
+  animation: sk-spin .8s linear infinite;
+}
+.cam-skeleton span {
+  position: absolute; top: calc(50% + 42px); font-size: 13px; font-weight: 700;
+  color: #a79dc7; letter-spacing: .4px;
+}
+@keyframes sk-spin { to { transform: rotate(360deg); } }
+
+/* ——— Hint shortcut keyboard kecil di atas undo-bar ——— */
+.kbd-hint {
+  position: absolute; bottom: calc(100% + 8px); left: 50%;
+  background: var(--ink); color: var(--bg); font-size: 12px; font-weight: 700;
+  padding: 6px 12px; border-radius: 10px; white-space: nowrap; pointer-events: none;
+  animation: kbd-in .18s var(--ease) both;
+}
+@keyframes kbd-in { from { opacity: 0; transform: translateX(-50%) scale(.9); } to { opacity: 1; transform: translateX(-50%) scale(1); } }
