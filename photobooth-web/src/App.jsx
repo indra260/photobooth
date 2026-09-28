@@ -9,6 +9,7 @@ import { composeStrip, stripBlob } from "./lib/strip";
 import { clearShots, deleteShot, listShots, putShot } from "./lib/gallery";
 import { clearSession, loadSession, saveSession } from "./lib/session";
 import TimelinePhotoReveal from "./components/TimelinePhotoReveal";
+import AROverlay from "./components/AROverlay";
 
 const STICKER_PACKS = {
   Komik: ["💬", "💥", "💭", "🗯️", "⚡", "🔥", "❓", "❗", "😱", "😵"],
@@ -278,6 +279,7 @@ export default function App() {
   // === FITUR BARU: AR Sticker Props (head-following accessories) ===
   const [arProp, setArProp] = useState(null);
   const arPropRef = useRef(null);
+  const [lastLandmarks, setLastLandmarks] = useState(null);
   
   const [collabActive, setCollabActive] = useState(false);
   const [collabFeed, setCollabFeed] = useState([]); // incoming foto dari device lain
@@ -482,6 +484,7 @@ export default function App() {
     motionDetector.current = new MotionDetector(video, {
       onFaceDetected: ({ landmarks, smile, motion }) => {
         setFaceVisible(true);
+        setLastLandmarks(landmarks); // Save for AR overlay
         
         // Update UI indicators
         const openness = Math.round(smile.mouthOpenness * 100);
@@ -1222,6 +1225,11 @@ export default function App() {
       const badge = newlyUnlocked[newlyUnlocked.length - 1];
       setBadgePopup(badge);
       setTimeout(() => setBadgePopup(null), 5000);
+      
+      // Burst confetti on badge unlock!
+      if (newlyUnlocked.length > 0) {
+        setTimeout(() => burstConfetti(), 300);
+      }
     }
   }
 
@@ -2177,7 +2185,15 @@ export default function App() {
             </div>
           )}
           {peerStatus && mode === "2" && <p className="peer-status">🔗 {peerStatus}</p>}
-          <Stage cams={cams} filterCss={filterCss} count={count} flash={flash} mirror={mirror} />
+          <Stage 
+            cams={cams} 
+            filterCss={filterCss} 
+            count={count} 
+            flash={flash} 
+            mirror={mirror}
+            arProp={arProp}
+            landmarks={lastLandmarks}
+          />
           <div className="dock">
             <div className="filters" role="listbox" aria-label="Filter">
               <span className="filter-label">🎞️ {filterById(filter).name}</span>
@@ -2573,11 +2589,41 @@ function Stage({ cams, filterCss, count, flash, mirror }) {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     else scope.requestFullscreen?.().catch(() => {});
   }
+
+  // Simple AR prop lookup
+  function getArPropEmoji(id) {
+    if (id === "crown" || id === "👑") return "👑";
+    if (id === "cap" || id === "🧢") return "🧢";
+    if (id === "party-hat" || id === "🎉") return "🎉";
+    if (id === "sunglasses" || id === "🕶️") return "🕶️";
+    if (id === "glasses" || id === "👓") return "👓";
+    if (id === "hearts-eyes" || id === "💖") return "💖";
+    if (id === "bunny" || id === "🐰") return "🐰";
+    if (id === "cat" || id === "🐱") return "🐱";
+    return id;
+  }
+
+  function getTypeForProp(id) {
+    if (["crown", "cap", "party-hat"].includes(id)) return "hat";
+    if (["sunglasses", "glasses", "hearts-eyes"].includes(id)) return "eyes";
+    if (["bunny", "cat"].includes(id)) return "top";
+    return "mouth";
+  }
+
   return (
     <div className="stage">
       {cams.length === 0 && <div className="cam-skeleton" aria-hidden="true"><span>Memuat kamera…</span></div>}
       <div className={"cams" + (cams.length > 1 ? " dual" : "")} id="cams">
         {cams.map((stream, i) => <Cam key={stream.id || i} stream={stream} filterCss={filterCss} mirror={mirror} />)}
+        {landmarks && arProp && (
+          <AROverlay 
+            landmarks={landmarks}
+            arProps={[{ id: arProp, emoji: getArPropEmoji(arProp), type: getTypeForProp(arProp) }]}
+            active={true}
+            width={640}
+            height={480}
+          />
+        )}
       </div>
       <div className="count" key={count} aria-live="assertive">{count}</div>
       <div className={flash ? "flash on" : "flash"} />
