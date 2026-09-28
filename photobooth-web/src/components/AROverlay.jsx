@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { drawAROverlay } from "../lib/ar-overlay";
 
 /**
  * AR Overlay Canvas - draws face landmarks and props over video
@@ -28,12 +27,12 @@ export default function AROverlay({
     if (landmarks && landmarks.length > 0) {
       const faceLandmarks = landmarks[0]; // First face detected
       
-      // Draw landmarks as dots
+      // Draw landmarks as dots (using canvas width for scaling)
       ctx.fillStyle = "#4f46e5";
       for (let i = 0; i < Math.min(faceLandmarks.length, 478); i++) {
         const landmark = faceLandmarks[i];
         ctx.beginPath();
-        ctx.arc(landmark.x * 1000, landmark.y * 1000, 0.3, 0, Math.PI * 2);
+        ctx.arc(landmark.x * canvas.width, landmark.y * canvas.height, 0.3, 0, Math.PI * 2);
         ctx.fill();
       }
       
@@ -47,11 +46,11 @@ export default function AROverlay({
         const rightEyeInner = faceLandmarks[473];
         const mouthCenter = faceLandmarks[13];
         
-        const faceWidth = Math.abs(rightEyeInner.x - leftEyeInner.x) * 1000;
-        const faceHeight = (mouthCenter.y - noseTip.y) * 1000;
+        const faceWidth = Math.abs(rightEyeInner.x - leftEyeInner.x) * canvas.width;
+        const faceHeight = (mouthCenter.y - noseTip.y) * canvas.height;
         
-        const faceCenterX = (leftEyeInner.x + rightEyeInner.x) / 2 * 1000;
-        const faceCenterY = (noseTip.y + mouthCenter.y) / 2 * 1000;
+        const faceCenterX = (leftEyeInner.x + rightEyeInner.x) / 2 * canvas.width;
+        const faceCenterY = (noseTip.y + mouthCenter.y) / 2 * canvas.height;
         
         const scale = Math.max(faceWidth, faceHeight) / 300;
         
