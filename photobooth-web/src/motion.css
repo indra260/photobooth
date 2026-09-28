@@ -2,6 +2,13 @@
    Semua pakai transform/opacity doang biar GPU-friendly.
    Hormat sama prefers-reduced-motion di bawah. */
 
+/* Easing helpers */
+:root {
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-circ: cubic-bezier(0.075, 0.82, 0.165, 1);
+}
+
+
 @keyframes card-sweep {
   from { opacity: 0; transform: translateY(24px) scale(.96); }
   to   { opacity: 1; transform: none; }
@@ -217,3 +224,119 @@
   animation: kbd-in .18s var(--ease) both;
 }
 @keyframes kbd-in { from { opacity: 0; transform: translateX(-50%) scale(.9); } to { opacity: 1; transform: translateX(-50%) scale(1); } }
+
+/* ═══════════════ BEST-SELLER MOTION PACK ═══════════════ */
+
+/* ——— 1. POLAROID DEVELOP: hasil nampol pelan pas masuk studio ——— */
+@keyframes develop-reveal {
+  0%   { filter: grayscale(.9) contrast(160%) brightness(65%) sepia(.25); }
+  45%  { filter: grayscale(.4) contrast(125%) brightness(85%) sepia(.1); }
+  100% { filter: none; }
+}
+.developing { animation: develop-reveal .95s cubic-bezier(.22,1,.36,1) both; }
+
+/* ——— 2. FLY-SHOT: foto "terbang" dari kamera ke kanvas studio ——— */
+.fly-shot {
+  position: fixed; z-index: 9997; object-fit: cover; pointer-events: none;
+  border-radius: 18px; border: 3px solid var(--line);
+  box-shadow: 5px 5px 0 var(--line), 0 18px 40px rgba(0,0,0,.22);
+  background: var(--card);
+  transition: left .55s var(--ease-out-expo), top .55s var(--ease-out-expo),
+              width .55s var(--ease-out-expo), height .55s var(--ease-out-expo);
+}
+
+/* ——— 3. PRINTER EXIT: strip keluar dari slot pas unduh ——— */
+.printer-exit-overlay { position: fixed; inset: 0; pointer-events: none; z-index: 9998; }
+.printer-dock {
+  position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%);
+  width: min(240px, 60vw); overflow: hidden;
+}
+.printer-paper { display: block; width: 100%; border-radius: 10px 10px 14px 14px; animation: paper-eject .68s cubic-bezier(.22,1,.36,1) both; }
+@keyframes paper-eject {
+  from { transform: translateY(-103%); }
+  to   { transform: translateY(0); }
+}
+.printer-mouth {
+  position: absolute; top: -8px; left: -10%; width: 120%; height: 16px;
+  background: var(--ink); border-radius: 10px;
+  box-shadow: 0 3px 0 rgba(0,0,0,.25), inset 0 -4px 6px rgba(255,255,255,.15);
+}
+
+/* ——— 4. TIMER RING di shutter + denyut angka 1 ——— */
+.shutter-wrap { position: relative; display: inline-grid; place-items: center; }
+.timer-ring-svg {
+  position: absolute; width: 86px; height: 86px; pointer-events: none;
+  transform: rotate(-90deg);
+}
+.timer-ring-bg { fill: none; stroke: color-mix(in srgb, var(--ink) 15%, transparent); stroke-width: 5; }
+.timer-ring-fill {
+  fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round;
+  stroke-dasharray: 181; stroke-dashoffset: 181;
+  transition: stroke-dashoffset 1s linear;
+}
+.shutter.urgent { animation: shutter-urgent .5s ease-in-out infinite; }
+@keyframes shutter-urgent {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); box-shadow: 3px 3px 0 var(--line), 0 0 0 8px color-mix(in srgb, var(--accent) 25%, transparent); }
+}
+
+/* ——— 5. MAGNETIC: CTA gede narik cursor (JS yang geser, ini cuma transisi) ——— */
+.magnetic { transition: transform .18s var(--ease-out-expo), box-shadow .18s var(--ease); will-change: transform; }
+
+/* ——— 6. DARK MODE circular reveal (View Transitions) ——— */
+:root.vt-dark-active::view-transition-old(root),
+:root.vt-dark-active::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+
+/* ——— 7. TEMPLATE MORPH: cross-dissolve lembut pas ganti layout ——— */
+:root.vt-morph-active::view-transition-old(root) { animation: morph-out .2s ease both; }
+:root.vt-morph-active::view-transition-new(root) { animation: morph-in .28s var(--ease) both; }
+@keyframes morph-out { to { opacity: 0; transform: scale(.988); } }
+@keyframes morph-in  { from { opacity: .35; transform: scale(1.006); } to { opacity: 1; transform: none; } }
+
+/* ——— 8. TILT 3D di preview studio (variabel diisi JS) ——— */
+.preview-tilt-wrap { perspective: 900px; width: 100%; display: flex; justify-content: center; }
+.preview-tilt-inner {
+  transform-style: preserve-3d; width: 100%; max-width: 380px;
+  transition: transform .35s ease-out;
+}
+.preview-tilt-inner.tilting { transition: transform .08s linear; }
+
+/* ——— 9. ROOM ARRIVAL: foto tamu nyusup dari tepi + badge ——— */
+.thumb-wrap.arriving { animation: guest-arrive .55s var(--ease) both; }
+@keyframes guest-arrive {
+  from { opacity: .2; transform: translateX(42px) scale(.9); }
+  to   { opacity: 1; transform: none; }
+}
+.thumb-wrap { position: relative; }
+.guest-flag {
+  position: absolute; top: -8px; right: -6px; z-index: 2; font-size: 13px;
+  background: var(--cyan); color: #fff; border: 2px solid var(--line);
+  border-radius: 999px; padding: 2px 7px; font-weight: 800;
+  box-shadow: 2px 2px 0 var(--line);
+  animation: guest-flag-pop .45s cubic-bezier(.22,1,.36,1) both;
+}
+@keyframes guest-flag-pop {
+  from { transform: scale(.6) rotate(-8deg); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+/* ——— 10. TOUR BUBBLE: hint pertama di atas shutter ——— */
+.tour-bubble {
+  position: absolute; bottom: calc(100% + 14px); left: 50%; transform: translateX(-50%);
+  background: var(--ink); color: var(--bg); font-size: 13px; font-weight: 700;
+  padding: 10px 14px; border-radius: 14px; white-space: nowrap; z-index: 8;
+  box-shadow: 3px 3px 0 rgba(0,0,0,.2);
+  animation: tour-pop .4s cubic-bezier(.22,1,.36,1) both;
+}
+.tour-bubble::after {
+  content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+  border: 8px solid transparent; border-top-color: var(--ink);
+}
+.tour-bubble button {
+  margin-left: 10px; background: var(--yellow); color: var(--ink); border: 2px solid var(--ink);
+  border-radius: 999px; font-weight: 800; font-size: 12px; padding: 3px 10px; cursor: pointer;
+}
+@keyframes tour-pop {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px) scale(.85); }
+  to   { opacity: 1; transform: translateX(-50%) none; }
+}

@@ -23,9 +23,45 @@ export function beep(freq, dur = 0.07, enabled = true) {
   } catch { /* audio ops blocked before gesture; ignore */ }
 }
 
-export function shutter(enabled = true) {
-  beep(160, 0.09, enabled);
-  setTimeout(() => beep(90, 0.12, enabled), 40);
+export function shutter(enabled = true, variant = "retro") {
+  if (!enabled) return;
+  
+  const variants = {
+    // 1. Retro - klasik double-beep kamera film
+    retro: () => {
+      beep(160, 0.09);
+      setTimeout(() => beep(90, 0.12), 40);
+    },
+    
+    // 2. Mechanical - SLR camera dengan lebih banyak mekanikal sound
+    mechanical: () => {
+      beep(300, 0.05);
+      setTimeout(() => beep(150, 0.08), 25);
+      setTimeout(() => beep(200, 0.06), 40);
+      setTimeout(() => beep(120, 0.10), 60);
+    },
+    
+    // 3. Cinematic - dramatic whoosh + deep thud
+    cinematic: () => {
+      beep(800, 0.2, false); // high tone whoosh (quiet volume via gain manipulation if needed)
+      setTimeout(() => beep(60, 0.2), 150); // deep thud
+    },
+    
+    // 4. Arcade - 8-bit blip blip style
+    arcade: () => {
+      beep(1200, 0.03);
+      setTimeout(() => beep(800, 0.04), 30);
+      setTimeout(() => beep(1500, 0.02), 50);
+    }
+  };
+  
+  variants[variant]?.();
+}
+
+/** Suara "nging" printer kecil buat momen strip keluar. */
+export function printer(enabled = true) {
+  if (!enabled) return;
+  for (let i = 0; i < 6; i++) setTimeout(() => beep(64 + (i % 2) * 26, 0.045, enabled), i * 60);
 }
 
 export function vibrate(ms) {

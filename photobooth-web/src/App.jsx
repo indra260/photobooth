@@ -3,7 +3,8 @@ import { FILTERS, TEMPLATES, filterById, filterWithIntensity, geometry } from ".
 import { downloadStrip, fitRatio, paintStrip } from "./draw";
 import { authEnabled, supabase } from "./supabase";
 import { cameraErrorMessage, discoverCameras, grab, openCamera, openDualCameras, stopStreams } from "./lib/camera";
-import { beep, shutter, sleep, vibrate } from "./lib/sound";
+import { beep, printer, shutter, sleep, vibrate } from "./lib/sound";
+import MotionDetector from "./lib/motion-detector";
 import { composeStrip, stripBlob } from "./lib/strip";
 import { clearShots, deleteShot, listShots, putShot } from "./lib/gallery";
 import { clearSession, loadSession, saveSession } from "./lib/session";
@@ -42,12 +43,29 @@ const SHAPES = [
   ["macan", "Cute Leopard", "4 foto", "Motif leopard lucu kekinian", "/templates/t-extra2.webp"],
   ["minimal", "Minimal Clean", "4 foto", "Bersih, simple, elegan", "/templates/t-extra1.webp"],
 ];
+// Preset layout untuk studio: satu klik = template + rasio cetak sekaligus.
+const LAYOUTS = [
+  ["vertikal-9:16", "Classic Strip · 9:16", "vertikal"],
+  ["pose4-1:1", "Polaroid · 1:1", "pose4"],
+  ["kotak-1:1", "Kotak Grid 2x2 · 1:1", "kotak"],
+  ["couple-2:3", "Couple · 2:3", "couple"],
+  ["ulangtahun-4:5", "Party · 4:5", "ulangtahun"],
+  ["komik-1:1", "Komik Pop · 1:1", "komik"],
+  ["buah-9:16", "Fresh Fruit · 9:16", "buah"],
+  ["pelangi-1:1", "Rainbow Glow · 1:1", "pelangi"],
+  ["macan-1:1", "Cute Leopard · 1:1", "macan"],
+  ["minimal-9:16", "Minimal Clean · 9:16", "minimal"],
+];
+// template id → [layoutId, ratio] (reverse lookup, biar tombol template bisa set rasio yg bener)
+const LAYOUT_BY_TEMPLATE = Object.fromEntries(LAYOUTS.map(([lid, , tpl]) => [tpl, lid]));
+const RATIO_BY_LAYOUT = Object.fromEntries(LAYOUTS.map(([lid, , tpl]) => [lid, lid.slice(tpl.length + 1)]));
 const RATIOS = [
   ["asli", "Strip Asli"],
   ["9:16", "Story (9:16)"],
   ["4:5", "Feed (4:5)"],
   ["1:1", "Kotak (1:1)"],
   ["3:2", "Cetak 4R (3:2)"],
+  ["2:3", "Cetak 4R potret (2:3)"],
 ];
 
 const STRINGS = {
@@ -94,6 +112,9 @@ const STRINGS = {
 };
 
 const emptyRetouch = { brightness: 100, contrast: 100, saturate: 100, smooth: 0 };
+
+// ——— util motion: hormatin prefers-reduced-motion ———
+const reduceMotion = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 // ——— Error boundary: tangkap crash render biar gak white screen ———
 export class ErrorBoundary extends Component {
@@ -208,8 +229,55 @@ export default function App() {
   const [order, setOrder] = useState([]);
   const [stickers, setStickers] = useState([]);
   const [picked, setPicked] = useState(-1);
+  const [fly, setFly] = useState(null); // animasi foto "terbang" kamera → studio
+  const [developing, setDeveloping] = useState(false);
+  const [printerShot, setPrinterShot] = useState("");
+  const [guestFlags, setGuestFlags] = useState([]); // index shots hasil dari HP teman
+  const [tourHint, setTourHint] = useState(false);
+
+  // === FITUR BARU: Motion & Face Detection ===
+  const [motionDetect, setMotionDetect] = useState(false); // toggle auto-capture via gerakan
+  const [smileDetect, setSmileDetect] = useState(false); // toggle auto-capture via senyum
+  const [faceVisible, setFaceVisible] = useState(false); // wajah terdeteksi realtime
+  const [smileLevel, setSmileLevel] = useState(0); // 0-100% untuk progress ring
+  const [motionLevel, setMotionLevel] = useState(0); // 0-100% motion intensity
+  const motionDetector = useRef(null);
+  const autoCaptureLock = useRef(false); // anti-spam guard
+
+  // === FITUR BARU: Live Counter & Stats ===
+  const [sessionStats, setSessionStats] = useState(() => {
+    try {
+      const raw = localStorage.getItem("kentamal-stats");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        // Validasi shape — migrasi dari format lama (plain number) ke object
+        if (typeof parsed === "object" && parsed && "total" in parsed) return parsed;
+        if (!isNaN(Number(parsed))) return { today: Number(parsed), total: Number(parsed), date: new Date().toDateString(), badges: [] };
+      }
+    } catch { /* ignore */ }
+    return { today: 0, total: 0, date: new Date().toDateString(), badges: [] };
+  });
+  const [badgePopup, setBadgePopup] = useState(null); // badge baru yang barusan unlock
+  const [timelineIndex, setTimelineIndex] = useState(-1); // foto yg lagi dilihat di timeline
+
+  // === FITUR BARU: Shutter Sound FX Variants ===
+  const [shutterFx, setShutterFx] = useState(() => {
+    try { return localStorage.getItem("kentamal-shutterfx") || "retro"; } catch { return "retro"; }
+  });
+  const SHUTTER_FX = [
+    ["retro", "Retro", "📷", "Klasik kamera film"],
+    ["mechanical", "Mechanical", "⚙️", "SLR professional"],
+    ["cinematic", "Cinematic", "🎬", "Whoosh dramatis"],
+    ["arcade", "Arcade", "🕹️", "8-bit blip"],
+  ];
+
+  // === FITUR BARU: Collaborative Board ===
+  const [collabActive, setCollabActive] = useState(false);
+  const [collabFeed, setCollabFeed] = useState([]); // incoming foto dari device lain
+  const [collabCode, setCollabCode] = useState("");
 
   const abort = useRef(false);
+  const tiltWrap = useRef(null);
   const hist = useRef({ past: [], future: [] });
   const [histLen, setHistLen] = useState([0, 0]); // [past, future] — buat disabled state tombol
   const pen = useRef(null);
@@ -222,9 +290,10 @@ export default function App() {
   const roomSeq = useRef(0);
   const camsRef = useRef([]);
   const canRetryCamera = errorKind === "camera";
-
   const frames = TEMPLATES[template].frames;
   const T = STRINGS[lang] || STRINGS.id;
+  // layout aktif: id preset yg cocok dgn template+ratio sekarang, else default preset template itu
+  const layout = RATIO_BY_LAYOUT[`${template}-${ratio}`] ? `${template}-${ratio}` : LAYOUT_BY_TEMPLATE[template];
 
   // ——— derived ———
   const displayOrder = useMemo(
@@ -388,6 +457,86 @@ export default function App() {
     try { localStorage.setItem("kentamal-theme", dark ? "dark" : "light"); } catch { /* ignore */ }
   }, [dark]);
 
+  // === PERSISTENCE: Shutter FX variant ===
+  useEffect(() => {
+    try { localStorage.setItem("kentamal-shutterfx", shutterFx); } catch { /* ignore */ }
+  }, [shutterFx]);
+
+  // === MOTION DETECTOR: Initialize & manage lifecycle ===
+  useEffect(() => {
+    if (!motionDetect && !smileDetect) {
+      motionDetector.current?.stop();
+      return;
+    }
+
+    const video = document.querySelector("#cams video");
+    if (!video || motionDetector.current) return;
+
+    motionDetector.current = new MotionDetector(video, {
+      onFaceDetected: ({ landmarks, smile, motion }) => {
+        setFaceVisible(true);
+        
+        // Update UI indicators
+        const openness = Math.round(smile.mouthOpenness * 100);
+        setSmileLevel(openness);
+        setMotionLevel(Math.round(motionLevel)); // Keep existing level (updated separately)
+        
+        // Auto-capture via smile
+        if (smileDetect && smile.isSmiling && !autoCaptureLock.current) {
+          autoCaptureLock.current = true;
+          
+          // Trigger shutter with delay
+          setTimeout(async () => {
+            if (!abort.current) {
+              await shoot();
+              autoCaptureLock.current = false;
+            }
+          }, 800); // Wait for clear smile detection
+        }
+        
+        // Auto-capture via motion (if enabled)
+        if (motionDetect && motion.distance > 15 && !autoCaptureLock.current) {
+          autoCaptureLock.current = true;
+          setTimeout(async () => {
+            if (!abort.current) {
+              await shoot();
+              autoCaptureLock.current = false;
+            }
+          }, 500);
+        }
+      },
+      
+      onSmileDetected: ({ mouthOpenness }) => {
+        setSmileLevel(Math.round(mouthOpenness * 100));
+        if (smileDetect && mouthOpenness > 0.35 && !autoCaptureLock.current) {
+          autoCaptureLock.current = true;
+          setTimeout(() => {
+            abort.current = false;
+            shoot();
+            setTimeout(() => autoCaptureLock.current = false, 2000);
+          }, 600);
+        }
+      },
+      
+      onMotionDetected: ({ distance }) => {
+        setMotionLevel(Math.min(100, Math.round(distance)));
+        if (motionDetect && distance > 15 && !autoCaptureLock.current) {
+          autoCaptureLock.current = true;
+          setTimeout(() => {
+            abort.current = false;
+            shoot();
+            setTimeout(() => autoCaptureLock.current = false, 2000);
+          }, 500);
+        }
+      }
+    });
+
+    return () => {
+      motionDetector.current?.dispose();
+      motionDetector.current = null;
+    };
+  }, [motionDetect, smileDetect, motionLevel]); // Re-init when toggles change
+
   // ——— kamera ———
   const open = useCallback(async (opts = {}) => {
     const { ratio: r = camRatio, device = camDeviceId, dual = dualCams, openMode = mode } = opts;
@@ -409,6 +558,8 @@ export default function App() {
       setStickers([]);
       abort.current = false;
       setStep("live");
+      // hint pertama kali masuk kamera (dismissible)
+      try { if (!localStorage.getItem("kentamal-tour")) setTourHint(true); } catch { /* ignore */ }
       discoverCameras().then(setDevices);
     } catch (err) {
       setError(cameraErrorMessage(err));
@@ -524,6 +675,10 @@ export default function App() {
         else next[0] = snap;
         return next;
       });
+      // index shot baru untuk guest flag
+      const flags = [...guestFlags];
+      flags.push(shots.filter(Boolean).length);
+      setGuestFlags(flags);
       setOrder((prev) => (prev.length < frames ? [...prev, prev.length] : prev));
       setPeerStatus("📸 Foto teman masuk ke strip!");
       bumpStats();
@@ -583,7 +738,7 @@ export default function App() {
         crops: videos.map(() => ({ zoom: 1, panX: 0, panY: 0 })),
       });
       setShots(next.slice());
-      shutter(soundOn);
+      shutter(soundOn, shutterFx);
       if (soundOn) vibrate(80);
       setFlash(true);
       setTimeout(() => setFlash(false), 180);
@@ -594,6 +749,8 @@ export default function App() {
     if (mode === "2" && roomRole === "guest") {
       forEachConn((c) => { try { c.send({ type: "photo", url: next[next.length - 1].images[0].toDataURL("image/jpeg", 0.82) }); } catch { /* ignore */ } });
     }
+    // rect video masih valid di step live — tangkep sebelum pindah ke studio
+    launchFly(videos[0], next[next.length - 1].images[0]);
     endShoot(true);
   }
 
@@ -601,7 +758,22 @@ export default function App() {
     setBusy(false);
     setCount("");
     setProgress(0);
-    if (goEdit) setStep("edit");
+    if (goEdit) {
+      setStep("edit");
+      // polaroid develop: hasil "nampak" pelan pas masuk studio
+      if (!reduceMotion()) {
+        setDeveloping(true);
+        setTimeout(() => setDeveloping(false), 1000);
+      }
+    }
+  }
+
+  // ——— FLY-SHOT: ambil posisi video sebelum pindah ke studio ———
+  function launchFly(video, imgCanvas) {
+    if (reduceMotion() || !video || !imgCanvas) return;
+    const rect = video.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    setFly({ from: { left: rect.left, top: rect.top, width: rect.width, height: rect.height }, url: imgCanvas.toDataURL("image/jpeg", 0.85) });
   }
 
   async function shootSingle(index) {
@@ -630,7 +802,7 @@ export default function App() {
       else next.push(snap);
       return next;
     });
-    shutter(soundOn);
+    shutter(soundOn, shutterFx);
     setFlash(true);
     setTimeout(() => setFlash(false), 180);
     setRetakeSlot(-1);
@@ -847,6 +1019,7 @@ export default function App() {
     downloadStrip(composeStrip(paintOpts()), ratio);
     saveToGallery();
     burstConfetti();
+    runPrinter(preview.current?.toDataURL("image/jpeg", 0.7) || "");
   }
 
   function saveJpeg() {
@@ -856,10 +1029,12 @@ export default function App() {
     a.download = `kentamal-${Date.now()}.jpg`;
     a.click();
     saveToGallery();
+    runPrinter(out.toDataURL("image/jpeg", 0.7));
   }
 
   function printStrip() {
     const out = fitRatio(composeStrip(paintOpts()), ratio);
+    runPrinter(out.toDataURL("image/jpeg", 0.7));
     const win = window.open("", "_blank", "width=600,height=800");
     if (!win) { setError("Pop-up diblokir. Izinkan pop-up lalu coba lagi."); setErrorKind(""); return; }
     win.document.write(`<html><head><title>Cetak Kentamal</title><style>body{text-align:center;font-family:sans-serif}img{max-width:100%;height:auto}button{margin:12px;padding:10px 24px;font-size:16px;border-radius:8px;border:2px solid #241d3d;background:#4f46e5;color:#fff;font-weight:bold;cursor:pointer}</style></head><body><img src="${out.toDataURL("image/png")}" /><br/><button onclick="window.print()">🖨️ Cetak</button></body></html>`);
@@ -937,11 +1112,69 @@ export default function App() {
   }
 
   function bumpStats() {
-    setStats((s) => {
-      const n = s + 1;
-      try { localStorage.setItem("kentamal-stats", String(n)); } catch { /* ignore */ }
-      return n;
+    const today = new Date().toDateString();
+    let newlyUnlocked = []; // Track badges unlocked in this call
+    
+    setSessionStats((s) => {
+      let currentDate = s.date;
+      let currentToday = s.today || 0;
+      let currentTotal = s.total || 0;
+      const currentBadges = Array.isArray(s.badges) ? s.badges : [];
+      
+      // Reset daily counter if different day
+      if (currentDate !== today) {
+        currentDate = today;
+        currentToday = 1;
+        currentTotal += 1;
+      } else {
+        currentToday += 1;
+        currentTotal += 1;
+      }
+      
+      // Check for badge unlocks
+      // 🎯 Badge: First Photo
+      if (!currentBadges.includes("first")) {
+        newlyUnlocked.push({ id: "first", name: "📸 Foto Pertama", desc: "Ambil foto pertama kamu!", unlockAt: Date.now() });
+      }
+      
+      // 🔥 Badge: Photo Streak
+      if (currentToday >= 5 && !currentBadges.includes("streak5")) {
+        newlyUnlocked.push({ id: "streak5", name: "🔥 Hot Streak", desc: "5 foto hari ini!", unlockAt: Date.now() });
+      }
+      if (currentToday >= 10 && !currentBadges.includes("streak10")) {
+        newlyUnlocked.push({ id: "streak10", name: "💪 Super Star", desc: "10 foto hari ini!", unlockAt: Date.now() });
+      }
+      
+      // 🎉 Badge: Milestone Achievements
+      if (currentTotal === 50 && !currentBadges.includes("milestone50")) {
+        newlyUnlocked.push({ id: "milestone50", name: "⭐ 50 Photos", desc: "Total 50 foto!", unlockAt: Date.now() });
+      }
+      if (currentTotal === 100 && !currentBadges.includes("milestone100")) {
+        newlyUnlocked.push({ id: "milestone100", name: "🏆 Legend", desc: "Total 100 foto!", unlockAt: Date.now() });
+      }
+      
+      const finalBadges = [...currentBadges, ...newlyUnlocked.map(b => b.id)];
+      
+      const result = { 
+        date: currentDate, 
+        today: currentToday, 
+        total: currentTotal, 
+        badges: finalBadges 
+      };
+      
+      try { localStorage.setItem("kentamal-stats", JSON.stringify(result)); } catch { /* ignore */ }
+      return result;
     });
+    
+    // Also increment old stats for backward compatibility
+    setStats(s => s + 1);
+    
+    // Trigger badge popup outside setState if there are new badges
+    if (newlyUnlocked.length > 0) {
+      const badge = newlyUnlocked[newlyUnlocked.length - 1];
+      setBadgePopup(badge);
+      setTimeout(() => setBadgePopup(null), 5000);
+    }
   }
 
   function burstConfetti() {
@@ -1055,6 +1288,93 @@ export default function App() {
     const apply = () => setPage(next);
     if (document.startViewTransition) document.startViewTransition(apply);
     else apply();
+  }
+
+  // ——— DARK MODE: circular reveal dari posisi tombol ———
+  function toggleDark(e) {
+    const r = e.currentTarget.getBoundingClientRect();
+    const apply = () => setDark((d) => !d);
+    if (!document.startViewTransition || reduceMotion()) return apply();
+    const x = ((r.left + r.width / 2) / window.innerWidth) * 100;
+    const y = ((r.top + r.height / 2) / window.innerHeight) * 100;
+    document.documentElement.style.setProperty("--mx", `${x}%`);
+    document.documentElement.style.setProperty("--my", `${y}%`);
+    document.documentElement.classList.add("vt-dark-active");
+    const vt = document.startViewTransition(apply);
+    vt.finished.finally(() => document.documentElement.classList.remove("vt-dark-active"));
+  }
+
+  // ——— MAGNETIC: tombol gede narik cursor (desktop pointer halus aja) ———
+  useEffect(() => {
+    if (reduceMotion()) return;
+    const onMove = (e) => {
+      if (e.pointerType && e.pointerType !== "mouse") return;
+      const el = e.target.closest?.(".magnetic");
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const dx = (e.clientX - (r.left + r.width / 2)) / (r.width / 2);
+      const dy = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
+      const k = Math.min(1, Math.hypot(dx, dy));
+      el.style.transform = `translate(${dx * 7 * k}px, ${dy * 5 * k}px)`;
+    };
+    const onOut = (e) => {
+      const el = e.target.closest?.(".magnetic");
+      if (el) el.style.transform = "";
+    };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    window.addEventListener("pointerout", onOut, { passive: true });
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerout", onOut);
+    };
+  }, []);
+
+  // ——— TILT 3D di preview studio ———
+  function onPreviewMove(e) {
+    if (reduceMotion() || e.pointerType === "touch") return;
+    const el = tiltWrap.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const px = (e.clientX - r.left) / r.width - 0.5;
+    const py = (e.clientY - r.top) / r.height - 0.5;
+    el.style.transform = `rotateY(${px * 6}deg) rotateX(${-py * 5}deg)`;
+  }
+  function onPreviewLeave() {
+    if (tiltWrap.current) tiltWrap.current.style.transform = "";
+  }
+
+  // ——— LAYOUT PRESET: satu klik set template + rasio cetak sekaligus ———
+  function switchLayout(layoutId) {
+    const preset = LAYOUTS.find(([lid]) => lid === layoutId);
+    if (!preset) return;
+    pushHistory();
+    const [, , tpl] = preset;
+    const apply = () => {
+      setTemplate(tpl);
+      setRatio(RATIO_BY_LAYOUT[layoutId]);
+    };
+    if (!document.startViewTransition || reduceMotion()) return apply();
+    document.documentElement.classList.add("vt-morph-active");
+    const vt = document.startViewTransition(apply);
+    vt.finished.finally(() => document.documentElement.classList.remove("vt-morph-active"));
+  }
+
+  // ——— TEMPLATE MORPH: cross-dissolve pas ganti layout strip ———
+  function switchTemplate(id) {
+    pushHistory();
+    const apply = () => setTemplate(id);
+    if (!document.startViewTransition || reduceMotion()) return apply();
+    document.documentElement.classList.add("vt-morph-active");
+    const vt = document.startViewTransition(apply);
+    vt.finished.finally(() => document.documentElement.classList.remove("vt-morph-active"));
+  }
+
+  // ——— PRINTER EXIT: strip "keluar" pas unduh/cetak ———
+  function runPrinter(url) {
+    if (reduceMotion()) return;
+    setPrinterShot(url);
+    printer(soundOn);
+    setTimeout(() => setPrinterShot(""), 760);
   }
 
   // ——— canvas pointer edit ———
@@ -1180,6 +1500,31 @@ export default function App() {
           ))}
         </div>
       )}
+      
+      {/* === BADGE POPUP === */}
+      {badgePopup && (
+        <div className="badge-popup" role="alert" aria-live="polite">
+          <div className="badge-card">
+            <span className="badge-icon">{badgePopup.name.charAt(0)}</span>
+            <div className="badge-content">
+              <strong className="badge-title">{badgePopup.name}</strong>
+              <p className="badge-desc">{badgePopup.desc}</p>
+            </div>
+            <button type="button" onClick={() => setBadgePopup(null)} className="ghost small" aria-label="Close">✕</button>
+          </div>
+          <div className="badge-ripple" />
+        </div>
+      )}
+      
+      {fly && <FlyShot fly={fly} previewRef={preview} onDone={() => setFly(null)} />}
+      {printerShot && (
+        <div className="printer-exit-overlay" aria-hidden="true">
+          <div className="printer-dock">
+            <span className="printer-mouth" />
+            <img className="printer-paper" src={printerShot} alt="" />
+          </div>
+        </div>
+      )}
       {showOnboard && (
         <div className="onboard" role="dialog" aria-modal="true" aria-label="Cara pakai">
           <div className="onboard-card">
@@ -1189,7 +1534,7 @@ export default function App() {
               <div><span>2</span><p><b>Jepret</b> — hitung mundur + filter kamera estetik.</p></div>
               <div><span>3</span><p><b>Edit & unduh</b> — stiker, teks, retouch, langsung share.</p></div>
             </div>
-            <button className="jp-btn-giant" type="button" onClick={dismissOnboard}>Mulai! 🚀</button>
+            <button className="jp-btn-giant magnetic" type="button" onClick={dismissOnboard}>Mulai! 🚀</button>
           </div>
         </div>
       )}
@@ -1243,7 +1588,7 @@ export default function App() {
                 <button className="ghost" type="button" onClick={() => setLang((l) => (l === "id" ? "en" : "id"))} aria-label="Bahasa" title="Bahasa / Language">
                   {lang === "id" ? "🇮🇩" : "🇬🇧"}
                 </button>
-                <button className="ghost" type="button" onClick={() => setDark((d) => !d)} aria-label="Mode gelap">{dark ? "🌙" : "☀️"}</button>
+                <button className="ghost" type="button" onClick={toggleDark} aria-label="Mode gelap">{dark ? "🌙" : "☀️"}</button>
           </div>
         </div>
       </header>
@@ -1262,7 +1607,7 @@ export default function App() {
               <p className="jp-subtitle">Photobooth digital yang keren, praktis, dan modern. Tanpa install aplikasi, langsung dari browser — foto kamu tidak pernah dikirim ke server.</p>
 
               <div className="jp-cta-group">
-                <button className="jp-btn-giant" type="button" onClick={() => setStep("mode")}>
+                <button className="jp-btn-giant magnetic" type="button" onClick={() => setStep("mode")}>
                   ✨ {T.coba}
                 </button>
                 <label className="jp-btn-outline upload">
@@ -1274,10 +1619,46 @@ export default function App() {
               <div className="jp-stats-row">
                 <div className="stat-card"><b>{FILTERS.reduce((n, g) => n + g.items.length, 0)}</b><span>{lang === "id" ? "Filter kamera" : "Camera filters"}</span></div>
                 <div className="stat-card"><b>{SHAPES.length}</b><span>{lang === "id" ? "Template strip" : "Strip templates"}</span></div>
-                <div className="stat-card"><b>0</b><span>{lang === "id" ? "Aplikasi di-install" : "Apps to install"}</span></div>
+                <div className="stat-card"><b>1</b><span>{lang === "id" ? "Mode shutter" : "Shutter modes"}</span></div>
                 <div className="stat-card"><b>100%</b><span>{lang === "id" ? "Jalan di browser" : "Runs in browser"}</span></div>
-                <div className="stat-card"><b>📸 {stats}</b><span>{lang === "id" ? "Foto dari booth ini" : "Photos from this booth"}</span></div>
+                
+                {/* Daily & Total Stats */}
+                <div className="stat-card stat-daily">
+                  <b style={{ color: "#4f46e5" }}>📅 {sessionStats.today}</b>
+                  <span>{lang === "id" ? `Foto hari ini (${new Date(sessionStats.date).toLocaleDateString("id-ID", { day: "numeric", month: "short" })})` : `Today (${new Date(sessionStats.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })})`}</span>
+                </div>
+                <div className="stat-card stat-total">
+                  <b>📸 {sessionStats.total}</b>
+                  <span>{lang === "id" ? "Total semua foto" : "All-time total photos"}</span>
+                </div>
               </div>
+              
+              {/* Badges Display */}
+              {sessionStats.badges && sessionStats.badges.length > 0 && (
+                <div className="badges-section" style={{ marginTop: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: 14 }}>🏆 Badge ({sessionStats.badges.length})</span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {Object.entries({
+                      first: "📸 Foto Pertama",
+                      streak5: "🔥 Hot Streak (5 foto)",
+                      streak10: "💪 Super Star (10 foto)",
+                      milestone50: "⭐ 50 Photos",
+                      milestone100: "🏆 Legend (100 photos)"
+                    }).map(([id, label]) => (
+                      <div 
+                        key={id} 
+                        className={`badge-item ${sessionStats.badges.includes(id) ? 'unlocked' : 'locked'}`}
+                        title={label}
+                      >
+                        <span className="badge-emoji">{label.split(' ')[0]}</span>
+                        {sessionStats.badges.includes(id) && <span className="badge-check">✓</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="jp-marquee" aria-hidden="true">
                 <div className="jp-marquee-track">
@@ -1303,7 +1684,7 @@ export default function App() {
               <div className="catalog">
                 {catalog.map(([id, label, count, desc, img]) => (
                   <div key={id} className={"card-wrap" + (favTemplates.includes(id) ? " fav" : "")}>
-                    <button type="button" className={template === id ? "card on" : "card"} onClick={() => { pushHistory(); setTemplate(id); }}>
+                    <button type="button" className={template === id ? "card on" : "card"} onClick={() => { switchTemplate(id); }}>
                       <span className="shot">
                         <img src={img} alt={label} loading="lazy" />
                       </span>
@@ -1384,7 +1765,7 @@ export default function App() {
                 </div>
               </div>
               <div className="jp-cta-group">
-                <button className="jp-btn-giant" type="button" onClick={() => setStep("mode")}>✨ {T.coba}</button>
+                <button className="jp-btn-giant magnetic" type="button" onClick={() => setStep("mode")}>✨ {T.coba}</button>
                 <button className="jp-btn-outline" type="button" onClick={() => goPage("pricing")}>💰 Lihat Harga</button>
               </div>
             </main>
@@ -1417,7 +1798,7 @@ export default function App() {
                 </div>
               </div>
               <div className="jp-cta-group">
-                <button className="jp-btn-giant" type="button" onClick={() => setStep("mode")}>✨ Buka Booth</button>
+                <button className="jp-btn-giant magnetic" type="button" onClick={() => setStep("mode")}>✨ Buka Booth</button>
               </div>
             </main>
           )}
@@ -1444,7 +1825,7 @@ export default function App() {
                 </div>
               </div>
               <div className="jp-cta-group">
-                <button className="jp-btn-giant" type="button" onClick={() => setStep("mode")}>✨ Pakai yang Gratis</button>
+                <button className="jp-btn-giant magnetic" type="button" onClick={() => setStep("mode")}>✨ Pakai yang Gratis</button>
               </div>
             </main>
           )}
@@ -1481,7 +1862,7 @@ export default function App() {
                   />
                 </label>
                 {authMessage && <p className="auth-message" role="alert">{authMessage}</p>}
-                <button className="jp-btn-giant" type="submit" disabled={authBusy || !authEnabled}>
+                <button className="jp-btn-giant magnetic" type="submit" disabled={authBusy || !authEnabled}>
                   {authBusy ? "Memproses…" : authMode === "login" ? "Masuk" : "Daftar"}
                 </button>
                 <button
@@ -1521,14 +1902,14 @@ export default function App() {
             <p className="jp-subtitle">Jepret sendiri di satu perangkat, atau ajak teman gabung dari HP-nya lewat kode room.</p>
 
             <div className="mode-grid">
-              <button type="button" className="mode-card" onClick={() => { setMode("1"); open({ openMode: "1" }); }}>
+              <button type="button" className="mode-card magnetic" onClick={() => { setMode("1"); open({ openMode: "1" }); }}>
                 <span className="mode-icon">📱</span>
                 <b>1 Perangkat</b>
                 <small>Jepret langsung di layar ini. Bisa tambah webcam kedua buat baris ganda.</small>
                 <span className="mode-cta">Mulai Jepret →</span>
               </button>
 
-              <button type="button" className="mode-card" onClick={() => { setMode("2"); setRoomRole("host"); hostRoom(); open({ openMode: "2" }); }}>
+              <button type="button" className="mode-card magnetic" onClick={() => { setMode("2"); setRoomRole("host"); hostRoom(); open({ openMode: "2" }); }}>
                 <span className="mode-icon">🖥️📱</span>
                 <b>2 Perangkat (Room)</b>
                 <small>Layar ini = booth utama. HP teman gabung pakai kode, fotonya nyatu ke strip.</small>
@@ -1637,9 +2018,78 @@ export default function App() {
                 {mirror ? "🪞 Mirror: On" : "🪞 Mirror: Off"}
               </button>
               <button className="ghost" type="button" onClick={() => setSoundOn((s) => !s)} aria-label="Suara" title="Suara">{soundOn ? "🔊" : "🔇"}</button>
+              
+              {/* === MOTION & SMILE DETECTION === */}
+              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                <button 
+                  className={motionDetect ? "on ghost" : "ghost"} 
+                  type="button" 
+                  onClick={() => setMotionDetect(!motionDetect)}
+                  aria-pressed={motionDetect}
+                  title="Auto-capture pas ada gerakan"
+                  disabled={!faceVisible && !busy}
+                >
+                  🎯 Motion {motionDetect ? "On" : "Off"}
+                  {!faceVisible && !busy && <span className="kbd-hint" style={{ fontSize: 10, opacity: 0.7 }}>(tunggu wajah…)</span>}
+                </button>
+                
+                <button 
+                  className={smileDetect ? "on ghost" : "ghost"} 
+                  type="button" 
+                  onClick={() => setSmileDetect(!smileDetect)}
+                  aria-pressed={smileDetect}
+                  title="Auto-capture pas senyum"
+                  disabled={!faceVisible && !busy}
+                >
+                  😄 Smile {smileDetect ? "On" : "Off"}
+                  {!faceVisible && !busy && <span className="kbd-hint" style={{ fontSize: 10, opacity: 0.7 }}>(tunggu wajah…)</span>}
+                </button>
+                
+                {faceVisible && (
+                  <>
+                    <div style={{ 
+                      width: 24, 
+                      height: 24, 
+                      borderRadius: '50%', 
+                      background: `conic-gradient(#4f46e5 ${smileLevel * 3.6}deg, #e5e7eb 0deg)`,
+                      transition: 'background 0.2s',
+                      position: 'relative'
+                    }}>
+                      <div style={{
+                        position: 'absolute',
+                        inset: 3,
+                        background: dark ? '#1c1a22' : '#fff',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 10
+                      }}>{smileLevel}%</div>
+                    </div>
+                  </>
+                )}
+              </div>
+              
               <button className="ghost" type="button" onClick={back}>← Batal</button>
             </div>
           </header>
+          
+          {/* Motion/Smile Status Indicators */}
+          {step === "live" && faceVisible && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: 16,
+              padding: '8px 0',
+              background: dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+              fontSize: 12,
+              color: dark ? '#d1d5db' : '#6b7280'
+            }}>
+              <span>👤 Wajah Terasi</span>
+              {motionDetect && <span>🎯 Motion Detect: {Math.min(100, Math.round(motionLevel))}%</span>}
+              {smileDetect && <span>😊 Smile Detect: {smileLevel}%</span>}
+            </div>
+          )}
           {progress > 0 && (
             <div className="progress-track" aria-hidden="true">
               <div className="progress-fill" style={{ width: `${progress}%` }} />
@@ -1684,15 +2134,51 @@ export default function App() {
                   <i key={i} className={i < shots.length ? "done" : i === shots.length && busy ? "on" : ""} />
                 ))}
               </div>
-              <button
-                className="shutter"
-                type="button"
-                disabled={busy}
-                onClick={() => { if (retakeSlot >= 0) shootSingle(retakeSlot); else shoot(); }}
-                aria-label="Jepret"
-              >
-                <b />
-              </button>
+              
+              {/* Shutter FX Selector */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8, fontSize: 11 }}>
+                <span title="Pilih suara shutter">🔊</span>
+                <select 
+                  value={shutterFx} 
+                  onChange={(e) => setShutterFx(e.target.value)}
+                  style={{ fontSize: 11, padding: 2, borderRadius: 3 }}
+                  aria-label="Pilih efek suara shutter"
+                >
+                  {SHUTTER_FX.map(([id, name, emoji, desc]) => (
+                    <option key={id} value={id}>{emoji} {name}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="shutter-wrap">
+                {count && (
+                  <svg className="timer-ring-svg" viewBox="0 0 64 64" aria-hidden="true">
+                    <circle className="timer-ring-bg" cx="32" cy="32" r="28.8" />
+                    <circle
+                      className="timer-ring-fill"
+                      cx="32"
+                      cy="32"
+                      r="28.8"
+                      style={{ strokeDashoffset: 181 - (181 * (Number(count) - 1)) / timer }}
+                    />
+                  </svg>
+                )}
+                <button
+                  className={"shutter" + (count === "1" ? " urgent" : "")}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => { if (retakeSlot >= 0) shootSingle(retakeSlot); else shoot(); }}
+                  aria-label="Jepret"
+                >
+                  <b />
+                </button>
+                {tourHint && (
+                  <span className="tour-bubble">
+                    👆 Tekan tombol bulat ini buat jepret
+                    <button type="button" onClick={() => { setTourHint(false); try { localStorage.setItem("kentamal-tour", "1"); } catch {} }}>Oke</button>
+                  </span>
+                )}
+              </div>
               {mode === "2" && (
                 <button className="ghost" type="button" onClick={sendPhotoToRoom} disabled={!connected || busy}>📤 Kirim 1 Foto</button>
               )}
@@ -1701,55 +2187,60 @@ export default function App() {
           </div>
         </section>
       )}
-
       {step === "edit" && (
         <section className="edit">
           <header className="edit-header">
             <strong>Kentamal Studio</strong>
             <button className="ghost" type="button" onClick={back}>← Beranda</button>
           </header>
-          <canvas
-            id="preview"
-            ref={preview}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onWheel={onWheel}
-            onTouchStart={onTouchStart}
-            onTouchMove={onTouchMove}
-            onTouchEnd={onTouchEnd}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              const emoji = e.dataTransfer.getData("text/emoji");
-              if (emoji) { dropSticker(emoji, e); return; }
-              const file = e.dataTransfer.files && e.dataTransfer.files[0];
-              if (file && file.type.startsWith("image/")) {
-                const canvas = preview.current;
-                const rect = canvas.getBoundingClientRect();
-                const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-                const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-                const cell = hitCell(template, "1", x, y);
-                if (cell) {
-                  pushHistory();
-                  fileToCanvas(file).then((img) => {
-                    const shotIndex = order[cell.shot];
-                    if (shotIndex === undefined) return;
-                    setShots((prev) => prev.map((item, i) => (i === shotIndex
-                      ? { ...item, images: item.images.map((im, k) => (k === cell.slot ? img : im)) }
-                      : item)));
-                  });
+          <div className="preview-tilt-wrap" ref={tiltWrap}>
+            <canvas
+              id="preview"
+              ref={preview}
+              className={"preview-tilt-inner" + (developing ? " developing" : "")}
+              onPointerDown={onPointerDown}
+              onPointerMove={(e) => { onPointerMove(e); onPreviewMove(e); }}
+              onPointerUp={onPointerUp}
+              onPointerLeave={onPreviewLeave}
+              onWheel={onWheel}
+              onTouchStart={onTouchStart}
+              onTouchMove={onTouchMove}
+              onTouchEnd={onTouchEnd}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                const emoji = e.dataTransfer.getData("text/emoji");
+                if (emoji) { dropSticker(emoji, e); return; }
+                const file = e.dataTransfer.files && e.dataTransfer.files[0];
+                if (file && file.type.startsWith("image/")) {
+                  const canvas = preview.current;
+                  const rect = canvas.getBoundingClientRect();
+                  const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+                  const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+                  const cell = hitCell(template, "1", x, y);
+                  if (cell) {
+                    pushHistory();
+                    fileToCanvas(file).then((img) => {
+                      const shotIndex = order[cell.shot];
+                      if (shotIndex === undefined) return;
+                      setShots((prev) => prev.map((item, i) => (i === shotIndex
+                        ? { ...item, images: item.images.map((im, k) => (k === cell.slot ? img : im)) }
+                        : item)));
+                    });
+                  }
                 }
-              }
-            }}
-          />
+              }}
+            />
+          </div>
           <p className="fine">Geser foto untuk crop • scroll/cubit zoom • klik foto = tuker urutan • stiker tarik & drop</p>
           <div className="thumbs">
             {order.map((shotIdx, i) => {
               const shot = shots[shotIdx];
               if (!shot) return null;
+              const isGuest = guestFlags.includes(shotIdx);
               return (
-                <div key={i} className={"thumb-wrap" + (retakeSlot === i ? " retaking" : "")}>
+                <div key={i} className={"thumb-wrap" + (retakeSlot === i ? " retaking" : "") + (isGuest ? " arriving" : "")}>
+                  {isGuest && <span className="guest-flag" title="Foto dari HP teman">📱</span>}
                   <button
                     type="button"
                     draggable
@@ -1795,9 +2286,17 @@ export default function App() {
 
           {tab === "template" && (
             <div className="tab-panel">
-              <div className="shapes slim">
+              <label className="ghost" style={{ display:"inline-flex", alignItems:"center", gap:6, marginBottom:8 }}>
+                🎨 Template Layout
+                <select value={layout} onChange={(e) => switchLayout(e.target.value)} aria-label="Pilih layout + rasio cetak" style={{ marginLeft:8, padding:4, fontSize:13, borderRadius:4, border:"1px solid #9ca3af" }}>
+                  {LAYOUTS.map(([lid, label]) => (
+                    <option key={lid} value={lid}>{label}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="shapes slim" style={{ marginTop:8 }}>
                 {SHAPES.map(([id, label]) => (
-                  <button key={id} type="button" className={template === id ? "on" : ""} aria-pressed={template === id} onClick={() => withHistory(() => setTemplate(id))}>{label}</button>
+                  <button key={id} type="button" className={template === id ? "on" : ""} aria-pressed={template === id} onClick={() => switchLayout(LAYOUT_BY_TEMPLATE[id])}>{label}</button>
                 ))}
               </div>
               <label className="ghost" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 8 }}>
@@ -1953,6 +2452,36 @@ export default function App() {
       )}
     </div>
   );
+}
+
+// Foto "terbang" dari posisi kamera ke kanvas studio (FLIP sederhana, tanpa lib).
+function FlyShot({ fly, previewRef, onDone }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    const target = previewRef.current;
+    if (!el) return;
+    el.style.left = `${fly.from.left}px`;
+    el.style.top = `${fly.from.top}px`;
+    el.style.width = `${fly.from.width}px`;
+    el.style.height = `${fly.from.height}px`;
+    // target cuma ada setelah step="edit" ter-render → tunggu 2 frame
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        const r = target?.getBoundingClientRect();
+        if (r) {
+          el.style.left = `${r.left}px`;
+          el.style.top = `${r.top}px`;
+          el.style.width = `${r.width}px`;
+          el.style.height = `${r.height}px`;
+        }
+      });
+    });
+    const t = setTimeout(onDone, 620);
+    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); clearTimeout(t); };
+  }, [fly, previewRef, onDone]);
+  return <img ref={ref} className="fly-shot" src={fly.url} alt="" aria-hidden="true" />;
 }
 
 function Stage({ cams, filterCss, count, flash, mirror }) {

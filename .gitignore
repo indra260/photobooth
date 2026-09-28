@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.wrangler/
+.vite/
+*.log
+.DS_Store
+
+# artifact commit pertama sebelum pindah ke photobooth-web/
+/index.html
+/app.js
+/vendor/
