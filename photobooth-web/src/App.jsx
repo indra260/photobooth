@@ -8,6 +8,7 @@ import MotionDetector from "./lib/motion-detector";
 import { composeStrip, stripBlob } from "./lib/strip";
 import { clearShots, deleteShot, listShots, putShot } from "./lib/gallery";
 import { clearSession, loadSession, saveSession } from "./lib/session";
+import TimelinePhotoReveal from "./components/TimelinePhotoReveal";
 
 const STICKER_PACKS = {
   Komik: ["💬", "💥", "💭", "🗯️", "⚡", "🔥", "❓", "❗", "😱", "😵"],
@@ -271,7 +272,13 @@ export default function App() {
     ["arcade", "Arcade", "🕹️", "8-bit blip"],
   ];
 
-  // === FITUR BARU: Collaborative Board ===
+  // === FITUR BARU: Timeline Photo Reveal ===
+  const [showTimeline, setShowTimeline] = useState(false);
+  
+  // === FITUR BARU: AR Sticker Props (head-following accessories) ===
+  const [arProp, setArProp] = useState(null);
+  const arPropRef = useRef(null);
+  
   const [collabActive, setCollabActive] = useState(false);
   const [collabFeed, setCollabFeed] = useState([]); // incoming foto dari device lain
   const [collabCode, setCollabCode] = useState("");
@@ -758,13 +765,22 @@ export default function App() {
     setBusy(false);
     setCount("");
     setProgress(0);
-    if (goEdit) {
-      setStep("edit");
-      // polaroid develop: hasil "nampak" pelan pas masuk studio
+    
+    if (goEdit && shots.length > 0) {
+      // Show timeline first, then go to edit after user closes it
       if (!reduceMotion()) {
         setDeveloping(true);
         setTimeout(() => setDeveloping(false), 1000);
       }
+      
+      // User can close timeline to go to edit studio
+      // Timeline will auto-hide when user clicks retake on any photo
+      // and we stay in timeline mode until they're satisfied or close it
+      
+      // Set a flag that tells us to show timeline overlay
+      setShowTimeline(true);
+    } else if (goEdit) {
+      setStep("edit");
     }
   }
 
@@ -774,6 +790,38 @@ export default function App() {
     const rect = video.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     setFly({ from: { left: rect.left, top: rect.top, width: rect.width, height: rect.height }, url: imgCanvas.toDataURL("image/jpeg", 0.85) });
+  }
+
+  // === TIMELINE HANDLERS ===
+  function handleTimelineRetake(idx) {
+    // Go back to live mode with retake slot set
+    setShowTimeline(false);
+    setRetakeSlot(idx);
+    setStep("live");
+  }
+  
+  function handleTimelineDelete(idx) {
+    // Delete photo from shots array
+    setShots((prev) => {
+      const next = prev.filter((_, i) => i !== idx);
+      return next.slice(0, frames);
+    });
+    // Also delete from order
+    setOrder((prev) => {
+      const filtered = prev.filter((i) => i !== idx);
+      // Fill remaining slots
+      while (filtered.length < frames) filtered.push(prev[prev.length - 1]);
+      return filtered.slice(0, frames);
+    });
+    bumpStats();
+  }
+  
+  function handleTimelineClose() {
+    setShowTimeline(false);
+    setTimeout(() => {
+      // Allow timeline to fully hide before going to edit
+      setStep("edit");
+    }, 300);
   }
 
   async function shootSingle(index) {
@@ -1517,6 +1565,17 @@ export default function App() {
       )}
       
       {fly && <FlyShot fly={fly} previewRef={preview} onDone={() => setFly(null)} />}
+      
+      {/* === TIMELINE PHOTO REVEAL === */}
+      {showTimeline && shots.length > 0 && (
+        <TimelinePhotoReveal
+          shots={shots}
+          onRetake={handleTimelineRetake}
+          onDelete={handleTimelineDelete}
+          onClose={handleTimelineClose}
+        />
+      )}
+      
       {printerShot && (
         <div className="printer-exit-overlay" aria-hidden="true">
           <div className="printer-dock">
@@ -2019,75 +2078,97 @@ export default function App() {
               </button>
               <button className="ghost" type="button" onClick={() => setSoundOn((s) => !s)} aria-label="Suara" title="Suara">{soundOn ? "🔊" : "🔇"}</button>
               
-              {/* === MOTION & SMILE DETECTION === */}
-              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                <button 
-                  className={motionDetect ? "on ghost" : "ghost"} 
-                  type="button" 
-                  onClick={() => setMotionDetect(!motionDetect)}
-                  aria-pressed={motionDetect}
-                  title="Auto-capture pas ada gerakan"
-                  disabled={!faceVisible && !busy}
+              {/* === MOTION & SMILE DETECTION — COMPACT + AUTO-HIDE === */}
+              {(motionDetect || smileDetect || faceVisible) && (
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  {faceVisible && (
+                    <>
+                      <button 
+                        className={motionDetect ? "on ghost small-btn" : "ghost small-btn"} 
+                        type="button" 
+                        onClick={() => setMotionDetect(!motionDetect)}
+                        aria-pressed={motionDetect}
+                        title="Auto-capture pas ada gerakan"
+                        disabled={busy}
+                      >
+                        🎯 {motionDetect ? "" : "⏸️"}
+                      </button>
+                      
+                      <button 
+                        className={smileDetect ? "on ghost small-btn" : "ghost small-btn"} 
+                        type="button" 
+                        onClick={() => setSmileDetect(!smileDetect)}
+                        aria-pressed={smileDetect}
+                        title="Auto-capture pas senyum"
+                        disabled={busy}
+                      >
+                        😄 {smileDetect ? "" : "⏸️"}
+                      </button>
+                      
+                      {/* Progress ring only when active */}
+                      {(motionDetect || smileDetect) && (
+                        <div style={{ 
+                          width: 20, 
+                          height: 20, 
+                          borderRadius: '50%', 
+                          background: `conic-gradient(#4f46e5 ${Math.max(smileLevel, motionLevel) * 3.6}deg, #e5e7eb 0deg)`,
+                          transition: 'background 0.15s',
+                          position: 'relative'
+                        }}>
+                          <div style={{
+                            position: 'absolute',
+                            inset: 3,
+                            background: dark ? '#1c1a22' : '#fff',
+                            borderRadius: '50%',
+                          }} />
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+              
+              {/* AR Sticker Picker - desktop only */}
+              {!/(iPhone|iPad|iPod|Android)/i.test(navigator.userAgent) && !faceVisible && arProp && (
+                <button
+                  className="ghost"
+                  type="button"
+                  onClick={() => setArProp(null)}
+                  title="Hapus AR Sticker"
+                  style={{ fontSize: "13px", padding: "4px 8px" }}
                 >
-                  🎯 Motion {motionDetect ? "On" : "Off"}
-                  {!faceVisible && !busy && <span className="kbd-hint" style={{ fontSize: 10, opacity: 0.7 }}>(tunggu wajah…)</span>}
+                  ✨ {arProp}
                 </button>
-                
-                <button 
-                  className={smileDetect ? "on ghost" : "ghost"} 
-                  type="button" 
-                  onClick={() => setSmileDetect(!smileDetect)}
-                  aria-pressed={smileDetect}
-                  title="Auto-capture pas senyum"
-                  disabled={!faceVisible && !busy}
-                >
-                  😄 Smile {smileDetect ? "On" : "Off"}
-                  {!faceVisible && !busy && <span className="kbd-hint" style={{ fontSize: 10, opacity: 0.7 }}>(tunggu wajah…)</span>}
-                </button>
-                
-                {faceVisible && (
-                  <>
-                    <div style={{ 
-                      width: 24, 
-                      height: 24, 
-                      borderRadius: '50%', 
-                      background: `conic-gradient(#4f46e5 ${smileLevel * 3.6}deg, #e5e7eb 0deg)`,
-                      transition: 'background 0.2s',
-                      position: 'relative'
-                    }}>
-                      <div style={{
-                        position: 'absolute',
-                        inset: 3,
-                        background: dark ? '#1c1a22' : '#fff',
-                        borderRadius: '50%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 10
-                      }}>{smileLevel}%</div>
-                    </div>
-                  </>
-                )}
-              </div>
+              )}
+              
+              {/* Show sticker picker dropdown in booth edit mode or as button */}
+              <button
+                className={arProp ? "ghost on" : "ghost"}
+                type="button"
+                onClick={() => {
+                  // Open AR Sticker picker modal here (will be implemented later)
+                  setArProp(arProp ? null : "👑"); // Toggle for now
+                }}
+                title="AR Sticker Props"
+                disabled={busy}
+              >
+                {arProp ? "✨ AR" : "✨ Add AR"}
+              </button>
               
               <button className="ghost" type="button" onClick={back}>← Batal</button>
             </div>
           </header>
           
-          {/* Motion/Smile Status Indicators */}
-          {step === "live" && faceVisible && (
+          {/* Status indicators only when face detected */}
+          {step === "live" && faceVisible && !motionDetect && !smileDetect && (
             <div style={{
               display: 'flex',
               justifyContent: 'center',
-              gap: 16,
-              padding: '8px 0',
-              background: dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-              fontSize: 12,
-              color: dark ? '#d1d5db' : '#6b7280'
+              padding: '6px 0',
+              fontSize: 11,
+              color: dark ? '#9ca3af' : '#6b7280'
             }}>
-              <span>👤 Wajah Terasi</span>
-              {motionDetect && <span>🎯 Motion Detect: {Math.min(100, Math.round(motionLevel))}%</span>}
-              {smileDetect && <span>😊 Smile Detect: {smileLevel}%</span>}
+              👤 Wajah terdeteksi • Aktifkan Motion/Smile untuk auto-capture
             </div>
           )}
           {progress > 0 && (
@@ -2135,19 +2216,21 @@ export default function App() {
                 ))}
               </div>
               
-              {/* Shutter FX Selector */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8, fontSize: 11 }}>
-                <span title="Pilih suara shutter">🔊</span>
-                <select 
-                  value={shutterFx} 
-                  onChange={(e) => setShutterFx(e.target.value)}
-                  style={{ fontSize: 11, padding: 2, borderRadius: 3 }}
-                  aria-label="Pilih efek suara shutter"
-                >
-                  {SHUTTER_FX.map(([id, name, emoji, desc]) => (
-                    <option key={id} value={id}>{emoji} {name}</option>
-                  ))}
-                </select>
+              {/* Shutter FX — compact segmented picker + test button */}
+              <div className="shutter-fx" role="group" aria-label="Efek suara shutter">
+                {SHUTTER_FX.map(([id, name, emoji, desc]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className={shutterFx === id ? "on" : ""}
+                    aria-pressed={shutterFx === id}
+                    title={`${desc} — klik buat preview`}
+                    onClick={() => { setShutterFx(id); if (soundOn) shutter(true, id); }}
+                  >
+                    <span aria-hidden="true">{emoji}</span>
+                    <em>{name}</em>
+                  </button>
+                ))}
               </div>
               
               <div className="shutter-wrap">
