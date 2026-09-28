@@ -2,7 +2,7 @@ import { Component, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { FILTERS, TEMPLATES, filterById, filterWithIntensity, geometry } from "./booth";
 import { downloadStrip, fitRatio, paintStrip } from "./draw";
 import { authEnabled, supabase } from "./supabase";
-import { cameraErrorMessage, discoverCameras, grab, openCamera, openDualCameras, stopStreams } from "./lib/camera";
+import { cameraErrorMessage, discoverCameras, drawARProp, grab, openCamera, openDualCameras, stopStreams } from "./lib/camera";
 import { beep, printer, shutter, sleep, vibrate } from "./lib/sound";
 import MotionDetector from "./lib/motion-detector";
 import { composeStrip, stripBlob } from "./lib/strip";
@@ -743,8 +743,21 @@ export default function App() {
       }
       setCount("");
       setProgress(0);
+      // Capture with AR props baked into the image
+      const captured = videos.map((video) => {
+        const canvas = grab(video, filter, filterStrength, mirror);
+        // Apply AR prop if enabled and face is detected
+        if (arProp && lastLandmarks && lastLandmarks.length > 0) {
+          const arPropData = getArPropData(arProp);
+          if (arPropData) {
+            const ctx = canvas.getContext("2d");
+            drawARProp(ctx, lastLandmarks, arPropData, canvas.width, canvas.height, mirror);
+          }
+        }
+        return canvas;
+      });
       next.push({
-        images: videos.map((video) => grab(video, filter, filterStrength, mirror)),
+        images: captured,
         crops: videos.map(() => ({ zoom: 1, panX: 0, panY: 0 })),
       });
       setShots(next.slice());
@@ -2590,7 +2603,7 @@ function Stage({ cams, filterCss, count, flash, mirror }) {
     else scope.requestFullscreen?.().catch(() => {});
   }
 
-  // Simple AR prop lookup
+  // Simple AR prop lookup (same functions as in Stage)
   function getArPropEmoji(id) {
     if (id === "crown" || id === "👑") return "👑";
     if (id === "cap" || id === "🧢") return "🧢";
@@ -2608,6 +2621,12 @@ function Stage({ cams, filterCss, count, flash, mirror }) {
     if (["sunglasses", "glasses", "hearts-eyes"].includes(id)) return "eyes";
     if (["bunny", "cat"].includes(id)) return "top";
     return "mouth";
+  }
+
+  function getArPropData(id) {
+    const emoji = getArPropEmoji(id);
+    const type = getTypeForProp(id);
+    return { id, emoji, type };
   }
 
   return (
